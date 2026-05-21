@@ -1,0 +1,36 @@
+# Ubuntu 24.04 dependency install commands for OJ Vibe Coding
+
+# 0) Update package index
+sudo apt update
+
+# 1) Build toolchain
+sudo apt install -y build-essential cmake ninja-build git pkg-config
+
+# 2) Common libraries
+sudo apt install -y nlohmann-json3-dev
+
+# YAML config parser
+sudo apt install -y libyaml-cpp-dev
+
+# Crypto / hashing helpers (for bcrypt/argon2/JWT/HMAC implementations)
+sudo apt install -y libargon2-dev libssl-dev
+
+# 3) MySQL (dev self-host)
+sudo apt install -y mysql-server default-libmysqlclient-dev mysql-client
+
+# 4) Unit testing (googletest)
+sudo apt install -y googletest
+
+# 5) Utilities (zip upload/unpack, strict diff tool)
+sudo apt install -y zip unzip diffutils
+
+# 6) Sandbox rootfs builder (for chroot)
+sudo apt install -y debootstrap
+
+# 7) (Optional) Initialize a minimal chroot rootfs under ./sandbox
+#    Run these after you create the sandbox directory in the project root.
+sudo debootstrap --variant=minbase noble ./sandbox http://archive.ubuntu.com/ubuntu/
+
+# 8) (Optional) Install runtime libs inside the sandbox (adjust as needed)
+sudo chroot ./sandbox apt update
+sudo chroot ./sandbox apt install -y libc6 libstdc++6 libgcc-s1

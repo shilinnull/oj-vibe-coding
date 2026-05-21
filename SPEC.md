@@ -16,7 +16,7 @@
 - 注册/登录/登出
 - 题目列表 + 题目详情页（含 Monaco/CodeMirror 在线编辑器）
 - 代码在线编辑 + "运行测试"（仅跑样例）+ "提交判题"（跑全部测试用例）
-- C/C++ 代码编译执行 + chroot 沙箱隔离
+- C/C++ 代码编译执行（nsjail：Linux namespaces + seccomp + cgroups）沙箱隔离
 - 标准输入输出比对（严格 diff 比对）+ 支持单题可配置时间限制和内存限制
 - 判题结果展示：Accepted / Wrong Answer / TLE / MLE / RE / CE / System Error，并展示失败用例的期望输出 vs 实际输出
 - 用户查看自己的提交历史
@@ -74,7 +74,7 @@
 │  ┌────────────────────▼───────────────────────────┐  │
 │  │          judger CLI (独立子进程)                 │  │
 │  │  - 编译: g++/gcc                                │  │
-│  │  - 沙箱: chroot + setrlimit(CPU/MEM)            │  │
+│  │  - 沙箱: nsjail + cgroups + setrlimit            │  │
 │  │  - 判题: 标准输入输出比对                        │  │
 │  │  - 结果: JSON 写入 stdout                        │  │
 │  └─────────────────────────────────────────────────┘  │
@@ -106,7 +106,7 @@ fork+exec judger CLI
      │
      ▼ (编译成功)
 对每个测试用例:
-  ├─ chroot 进入沙箱环境
+  ├─ nsjail 启动隔离环境（user/pid/mount/net namespaces + seccomp + cgroups）
   ├─ setrlimit 设置 CPU/MEM 限制
   ├─ 通过管道/stdin 注入输入数据
   ├─ 运行用户程序
@@ -182,12 +182,7 @@ oj-vibe-coding/
 │       ├── logger.cpp/h         # 日志封装（统一输出格式、日志级别、文件/控制台输出）
 │       ├── crypto.cpp/h         # 密码哈希 (bcrypt/argon2)
 │       └── json_helper.cpp/h    # JSON 序列化
-├── sandbox/                     # chroot 沙箱根目录
-│   ├── bin/
-│   ├── lib/                     # 运行时依赖库
-│   ├── lib64/
-│   ├── usr/
-│   └── tmp/                     # 提交代码暂存 & 编译执行
+├── run/                         # 运行期目录（默认用于 judger work_dir：编译产物/临时文件）
 ├── testdata/                    # 测试用例文件存储
 │   └── {problem_id}/
 │       ├── 1.in
@@ -232,7 +227,7 @@ auth:
 
 judge:
   max_concurrency:
-  sandbox_root:
+  nsjail_config:
   work_dir:
   default_time_limit_ms:
   default_memory_limit_kb:
@@ -264,7 +259,8 @@ logging:
   "test_cases": [
     {"input": "1 2", "expected_output": "3", "id": 1}
   ],
-  "sandbox_root": "./sandbox",
+  "nsjail_config": "./config/nsjail.cfg",
+  "work_dir": "./run/judge",
   "compile_cmd": "g++ -O2 -std=c++17 {source} -o {output}",
   "run_cmd": "{binary}"
 }
@@ -294,11 +290,12 @@ logging:
 }
 ```
 
-**沙箱策略（基础方案）：**
+**沙箱策略：**
 
 | 机制 | 用途 |
 |------|------|
-| `chroot(sandbox_root)` | 文件系统隔离，限制程序只能访问沙箱目录 |
+| nsjail（namespaces + seccomp） | 进程/挂载/用户/网络等隔离，限制系统调用面 |
+| cgroups | CPU/内存/进程数等资源隔离与统计 |
 | `setrlimit(RLIMIT_CPU)` | CPU 时间硬限制 |
 | `setrlimit(RLIMIT_AS)` | 地址空间/内存硬限制（防止内存溢出） |
 | `setrlimit(RLIMIT_NPROC)` | 限制子进程数量（防止 fork 炸弹） |
@@ -309,17 +306,14 @@ logging:
 
 **判题流程伪代码：**
 ```
-1. 将源代码写入 sandbox/tmp/{submission_id}.cpp
-2. fork() → 子进程:
-   a. chdir(sandbox_root)
-   b. chroot(".")
-   c. setuid(nobody)  // 降权，避免 root 逃逸
-   d. setrlimit(...)  // 设置各项资源限制
-   e. execvp 执行编译命令
+1. 将源代码写入 work_dir/{submission_id}.cpp
+2. fork() → 子进程（编译阶段，建议也放入 nsjail 内执行）:
+  a. setrlimit(...)  // 设置各项资源限制
+  b. execvp 执行：nsjail --config {nsjail_config} -- {compile_cmd}
 3. 父进程等待编译完成 → 检查退出码
 4. 编译失败 → 收集 stderr → 返回 CE
 5. 编译成功 → 对每个测试用例:
-   a. fork() → 子进程进入沙箱执行用户程序
+  a. fork() → 子进程在 nsjail 内执行用户程序
    b. 通过管道写入 .in 数据到子进程 stdin
    c. 收集 stdout + 资源使用量 (wait4 + getrusage)
    d. diff 比对 actual_output vs expected_output
@@ -457,11 +451,11 @@ CREATE TABLE submissions (
 
 ### P1 — 判题核心
 - [ ] **P1-1** 实现 judger CLI：编译模块（g++/gcc 调用）
-- [ ] **P1-2** 实现 judger CLI：沙箱执行（chroot + setrlimit）
+- [ ] **P1-2** 实现 judger CLI：沙箱执行（方案 A：nsjail + seccomp + cgroups + setrlimit）
 - [ ] **P1-3** 实现 judger CLI：输出比对（严格 diff）
 - [ ] **P1-4** 实现 judger CLI：结果汇总 JSON 输出
 - [ ] **P1-5** 实现 JudgeManager：队列 + 并发控制（4 上限） + fork/exec 调用 judger CLI
-- [ ] **P1-6** 搭建 sandbox 目录，准备运行时依赖（libc, libstdc++, libgcc_s 等）
+- [ ] **P1-6** 准备 nsjail 配置（seccomp policy、挂载白名单/只读、网络隔离、cgroups 限制）
 
 ### P2 — 用户系统 & 鉴权
 - [ ] **P2-1** 实现密码哈希工具 `crypto.cpp/h`（bcrypt/argon2）
@@ -532,7 +526,7 @@ CREATE TABLE submissions (
 
 | 测试点 | 验收条件 |
 |--------|----------|
-| chroot 隔离 | 用户程序无法读取宿主机 `/etc/passwd` 等敏感文件 |
+| nsjail 隔离 | 用户程序无法读取宿主机 `/etc/passwd` 等敏感文件（挂载隔离/白名单挂载） |
 | 资源限制 | 提交死循环代码 (`while(1){}`) 在指定时间限制内被杀死 |
 | 内存限制 | 提交无限 `malloc` 代码在内存限制内被杀死 |
 | fork 炸弹 | 提交 `fork()` 循环代码，系统进程数不爆炸 |

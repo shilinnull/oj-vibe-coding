@@ -1,0 +1,34 @@
+# OJ Vibe Coding server configuration (YAML)
+# Minimal skeleton: fill values as needed.
+# Optional: support environment placeholders like "${MYSQL_PASSWORD}" in your config loader.
+
+server:
+  host:
+  port:
+
+mysql:
+  host:
+  port:
+  user:
+  password:
+  database:
+  pool:
+    max_connections:
+    connect_timeout_ms:
+
+auth:
+  jwt:
+    secret:
+    expires_seconds:
+
+judge:
+  max_concurrency:
+  nsjail_config:
+  work_dir:
+  default_time_limit_ms:
+  default_memory_limit_kb:
+
+logging:
+  level:
+  to_stdout:
+  file:

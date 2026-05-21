@@ -24,13 +24,6 @@ sudo apt install -y googletest
 # 5) Utilities (zip upload/unpack, strict diff tool)
 sudo apt install -y zip unzip diffutils
 
-# 6) Sandbox rootfs builder (for chroot)
-sudo apt install -y debootstrap
-
-# 7) (Optional) Initialize a minimal chroot rootfs under ./sandbox
-#    Run these after you create the sandbox directory in the project root.
-sudo debootstrap --variant=minbase noble ./sandbox http://archive.ubuntu.com/ubuntu/
-
-# 8) (Optional) Install runtime libs inside the sandbox (adjust as needed)
-sudo chroot ./sandbox apt update
-sudo chroot ./sandbox apt install -y libc6 libstdc++6 libgcc-s1
+# 6) Isolated runner
+# Use nsjail to isolate untrusted code execution (namespaces + seccomp + cgroups).
+sudo apt install -y nsjail

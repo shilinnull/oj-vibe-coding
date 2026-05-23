@@ -441,13 +441,13 @@ CREATE TABLE submissions (
 ## 4. TODO 清单（按优先级排序）
 
 ### P0 — 基础设施
-- [ ] **P0-1** 搭建 CMake 项目骨架，引入 cpp-httplib、nlohmann/json、MySQL connector
-- [ ] **P0-2** 实现配置封装模块 `config.cpp/h`
-- [ ] **P0-3** 实现日志封装模块 `logger.cpp/h`
-- [ ] **P0-4** 实现 MySQL 连接池 `mysql_pool.cpp/h`
-- [ ] **P0-5** 编写 `scripts/init_db.sql` 建表脚本并初始化数据库
-- [ ] **P0-6** 引入 googletest，搭建 `tests/` 单元测试目录与基础测试入口
-- [ ] **P0-7** 实现各 DAO 层（user_dao、problem_dao、submission_dao、test_case_dao、language_dao）
+- [x] **P0-1** 搭建 CMake 项目骨架，引入 cpp-httplib、nlohmann/json、MySQL connector
+- [x] **P0-2** 实现配置封装模块 `config.cpp/h`
+- [x] **P0-3** 实现日志封装模块 `logger.cpp/h`
+- [x] **P0-4** 实现 MySQL 连接池 `mysql_pool.cpp/h`
+- [x] **P0-5** 编写 `scripts/init_db.sql` 建表脚本并初始化数据库
+- [x] **P0-6** 引入 googletest，搭建 `tests/` 单元测试目录与基础测试入口
+- [x] **P0-7** 实现各 DAO 层（user_dao、problem_dao、submission_dao、test_case_dao、language_dao）
 
 ### P1 — 判题核心
 - [ ] **P1-1** 实现 judger CLI：编译模块（g++/gcc 调用）

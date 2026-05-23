@@ -1,0 +1,79 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(oj_vibe_coding LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(OJ_BUILD_TESTS "Build unit tests" ON)
+
+find_path(CPPHTTPLIB_INCLUDE_DIR NAMES httplib.h REQUIRED)
+find_library(CPPHTTPLIB_LIBRARY NAMES cpp-httplib libcpp-httplib httplib PATHS /lib /lib/x86_64-linux-gnu /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib REQUIRED)
+
+find_package(yaml-cpp REQUIRED)
+find_package(nlohmann_json REQUIRED)
+
+# MySQL C client library
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(MYSQLCLIENT REQUIRED mysqlclient)
+
+add_library(oj_core STATIC)
+target_sources(oj_core
+	PRIVATE
+		src/utils/config.cpp
+		src/utils/logger.cpp
+		src/utils/json_helper.cpp
+		src/db/mysql_pool.cpp
+		src/db/dao/user_dao.cpp
+		src/db/dao/problem_dao.cpp
+		src/db/dao/submission_dao.cpp
+		src/db/dao/test_case_dao.cpp
+		src/db/dao/language_dao.cpp
+		src/model/user.cpp
+		src/model/problem.cpp
+		src/model/submission.cpp
+		src/model/test_case.cpp
+		src/model/language.cpp
+		src/server.cpp
+		src/router.cpp
+)
+
+target_include_directories(oj_core
+	PUBLIC
+		${CMAKE_CURRENT_SOURCE_DIR}/src
+		${CPPHTTPLIB_INCLUDE_DIR}
+		${MYSQLCLIENT_INCLUDE_DIRS}
+)
+
+target_link_libraries(oj_core
+	PUBLIC
+		yaml-cpp::yaml-cpp
+		nlohmann_json::nlohmann_json
+		${MYSQLCLIENT_LIBRARIES}
+		${CPPHTTPLIB_LIBRARY}
+)
+
+target_compile_options(oj_core PRIVATE -Wall -Wextra -Wpedantic)
+
+add_executable(oj_server src/main.cpp)
+target_link_libraries(oj_server PRIVATE oj_core)
+
+if(OJ_BUILD_TESTS)
+	enable_testing()
+	find_package(GTest REQUIRED)
+
+	# Keep unit tests under tests/ and auto-pick *_test.cpp recursively.
+	file(GLOB_RECURSE OJ_TEST_SOURCES CONFIGURE_DEPENDS
+		tests/*_test.cpp
+	)
+
+	add_executable(oj_tests
+		tests/main.cpp
+		${OJ_TEST_SOURCES}
+	)
+
+	target_link_libraries(oj_tests PRIVATE oj_core GTest::gtest GTest::gtest_main)
+
+	add_test(NAME oj_tests COMMAND oj_tests)
+endif()

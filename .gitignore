@@ -1,2 +1,4 @@
 # Runtime work dir (judger compile/run artifacts)
 /run/
+
+build/

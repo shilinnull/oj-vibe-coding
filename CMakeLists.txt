@@ -37,6 +37,7 @@ target_sources(oj_core
 		src/model/language.cpp
 		src/server.cpp
 		src/router.cpp
+		src/judge/judge_manager.cpp
 )
 
 target_include_directories(oj_core
@@ -58,6 +59,12 @@ target_compile_options(oj_core PRIVATE -Wall -Wextra -Wpedantic)
 
 add_executable(oj_server src/main.cpp)
 target_link_libraries(oj_server PRIVATE oj_core)
+
+# 单独编译 judger_cli 可执行，用于判题子进程
+add_executable(judger_cli src/judge/judger_cli.cpp)
+target_link_libraries(judger_cli PRIVATE oj_core nlohmann_json::nlohmann_json)
+# 将可执行放到 run/ 目录，便于 JudgeManager 使用相对路径 ./run/judger_cli
+set_target_properties(judger_cli PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/run)
 
 if(OJ_BUILD_TESTS)
 	enable_testing()

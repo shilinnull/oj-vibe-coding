@@ -132,22 +132,34 @@ oj-vibe-coding/
 ├── CMakeLists.txt
 ├── config/
 │   └── config.yaml              # MySQL连接、端口、JWT密钥等（YAML）
-├── web/                         # 前端静态文件
-│   ├── index.html
+├── web/                         # 前端静态文件（按 P4 — 前端 页面/组件划分）
+│   ├── index.html               # SPA 入口（加载 app.js 并挂载页面）
+│   ├── pages/                   # 独立 HTML 页面模板（或 SPA 路由对应的模板）
+│   │   ├── login.html
+│   │   ├── register.html
+│   │   ├── problem-list.html
+│   │   ├── problem-detail.html
+│   │   ├── submission-result.html
+│   │   ├── history.html
+│   │   └── admin/               # 管理后台页面
+│   │       ├── dashboard.html
+│   │       ├── problem-edit.html
+│   │       └── language-config.html
 │   ├── css/
 │   │   └── style.css
 │   ├── js/
-│   │   ├── app.js               # SPA 路由
-│   │   ├── api.js               # API 请求封装
-│   │   ├── components/
+│   │   ├── app.js               # SPA 路由与页面挂载
+│   │   ├── api.js               # API 请求封装（统一错误/鉴权处理）
+│   │   ├── components/          # 可复用 JS 组件（按功能拆分）
+│   │   │   ├── editor.js        # Monaco 集成封装（编辑器配置/主题/语言）
 │   │   │   ├── login.js
 │   │   │   ├── problem-list.js
 │   │   │   ├── problem-detail.js
 │   │   │   ├── submission-result.js
 │   │   │   └── history.js
-│   │   └── utils.js
+│   │   └── utils.js             # 辅助工具（格式化、debounce、storage）
 │   └── lib/
-│       └── monaco/              # Monaco Editor (或CDN引用)
+│       └── monaco/              # Monaco Editor（可放本地或 CDN 引用）
 ├── src/
 │   ├── main.cpp                 # 入口
 │   ├── server.cpp/h             # httplib Server 封装
@@ -464,19 +476,19 @@ CREATE TABLE submissions (
 - [x] **P2-4** 实现 Handler 抽象基类 `handler_base.h`
 
 ### P3 — 题目 & 提交 API
-- [ ] **P3-1** 实现 ProblemHandler：题目列表（分页）、题目详情
-- [ ] **P3-2** 实现 SubmissionHandler：提交代码（Run/Submit 模式差异化处理）
-- [ ] **P3-3** 实现 SubmissionHandler：判题结果查询（轮询）、提交历史
-- [ ] **P3-4** 实现"运行测试"模式：仅跑 `is_sample=1` 的测试用例
+- [x] **P3-1** 实现 ProblemHandler：题目列表（分页）、题目详情
+- [x] **P3-2** 实现 SubmissionHandler：提交代码（Run/Submit 模式差异化处理）
+- [x] **P3-3** 实现 SubmissionHandler：判题结果查询（轮询）、提交历史
+- [x] **P3-4** 实现"运行测试"模式：仅跑 `is_sample=1` 的测试用例
 
 ### P4 — 前端
-- [ ] **P4-1** 搭建静态页面框架 SPA（index.html + app.js 路由）
-- [ ] **P4-2** 实现登录/注册页
-- [ ] **P4-3** 实现题目列表页（分页、搜索、难度标记）
-- [ ] **P4-4** 实现题目详情页 + 集成 Monaco Editor
-- [ ] **P4-5** 实现提交结果展示页（loading 动画 → 结果表格，含失败用例详情）
-- [ ] **P4-6** 实现用户提交历史页
-- [ ] **P4-7** 实现 API 请求封装（api.js）与错误处理
+- [x] **P4-1** 搭建静态页面框架 SPA（index.html + app.js 路由）
+- [x] **P4-2** 实现登录/注册页
+- [x] **P4-3** 实现题目列表页（分页、搜索、难度标记）
+- [x] **P4-4** 实现题目详情页 + 集成 Monaco Editor
+- [x] **P4-5** 实现提交结果展示页（loading 动画 → 结果表格，含失败用例详情）
+- [x] **P4-6** 实现用户提交历史页
+- [x] **P4-7** 实现 API 请求封装（api.js）与错误处理
 
 ### P5 — 管理后台
 - [ ] **P5-1** 实现 AdminHandler：题目 CRUD（含 Markdown 渲染预览）
@@ -491,7 +503,7 @@ CREATE TABLE submissions (
 - [ ] **P6-2** 判题超时、系统异常等边缘案例完善
 - [ ] **P6-3** 性能优化：数据库索引、连接复用
 - [ ] **P6-4** cpp-httplib 静态文件 serving 配置
-- [ ] **P6-5** Handler 抽象层 Review，确保 Muduo 迁移友好
+- [ ] **P6-5** Handler 抽象层 Review
 
 ---
 

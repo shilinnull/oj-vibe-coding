@@ -1,0 +1,30 @@
+<section class="stack">
+	<div class="page-head">
+		<h1>题目列表</h1>
+		<span class="muted">当前页可见题目: <strong id="problem-count">0</strong></span>
+	</div>
+
+	<div class="card toolbar">
+		<div>
+			<label for="problem-search">搜索标题</label>
+			<input id="problem-search" placeholder="输入题目名关键字" />
+		</div>
+		<div>
+			<label for="problem-difficulty">难度</label>
+			<select id="problem-difficulty">
+				<option value="">全部</option>
+				<option value="easy">Easy</option>
+				<option value="medium">Medium</option>
+				<option value="hard">Hard</option>
+			</select>
+		</div>
+	</div>
+
+	<div id="problem-list" class="list"></div>
+
+	<div class="pager">
+		<button id="problem-prev" type="button" class="btn btn-ghost">上一页</button>
+		<span id="problem-pager-info" class="muted">第 1 页</span>
+		<button id="problem-next" type="button" class="btn btn-ghost">下一页</button>
+	</div>
+</section>

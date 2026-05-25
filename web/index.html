@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>OJ Vibe Coding</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&family=Space+Grotesk:wght@400;500;700&display=swap"
+			rel="stylesheet"
+		/>
+		<link rel="stylesheet" href="./css/style.css" />
+	</head>
+	<body>
+		<div class="bg-layer bg-layer-a" aria-hidden="true"></div>
+		<div class="bg-layer bg-layer-b" aria-hidden="true"></div>
+
+		<header class="topbar">
+			<a href="#/problems" class="brand" data-link>
+				<span class="brand-mark">OJ</span>
+				<span class="brand-text">Vibe Coding</span>
+			</a>
+			<nav class="topnav" id="topnav">
+				<a href="#/problems" data-link>题目</a>
+				<a href="#/history" data-link>提交历史</a>
+			</nav>
+			<div class="topbar-right">
+				<span id="user-badge" class="user-badge">未登录</span>
+				<button id="logout-btn" class="btn btn-ghost" type="button">退出</button>
+			</div>
+		</header>
+
+		<main class="container">
+			<section id="app" class="view-shell" aria-live="polite"></section>
+		</main>
+
+		<div id="toast-root" class="toast-root" aria-live="assertive" aria-atomic="true"></div>
+
+		<script type="module" src="./js/app.js"></script>
+	</body>
+</html>

@@ -1,0 +1,37 @@
+<section class="stack">
+	<div class="page-head">
+		<h1 id="result-title">提交结果</h1>
+		<div class="toolbar">
+			<button id="btn-to-problem" class="btn btn-ghost" type="button">返回题目</button>
+			<button id="btn-to-history" class="btn btn-ghost" type="button">提交历史</button>
+		</div>
+	</div>
+
+	<article class="card stack">
+		<div class="toolbar">
+			<span id="result-status" class="status-badge status-wait">PENDING</span>
+			<span id="result-loading" class="loading"><span class="spinner"></span><span>判题进行中，自动刷新...</span></span>
+		</div>
+		<div id="result-summary"></div>
+		<div id="compile-error"></div>
+	</article>
+
+	<article class="card stack">
+		<h2>测试用例详情</h2>
+		<div class="table-wrap">
+			<table>
+				<thead>
+					<tr>
+						<th>用例</th>
+						<th>状态</th>
+						<th>耗时(ms)</th>
+						<th>内存(KB)</th>
+						<th>期望输出</th>
+						<th>实际输出</th>
+					</tr>
+				</thead>
+				<tbody id="result-cases"></tbody>
+			</table>
+		</div>
+	</article>
+</section>

@@ -59,22 +59,6 @@ MYSQL_BIND BindInt64Out(std::int64_t* v, bool* is_null) {
 	return b;
 }
 
-MYSQL_BIND BindIntOut(int* v, bool* is_null) {
-	MYSQL_BIND b{};
-	std::memset(&b, 0, sizeof(b));
-	b.buffer_type = MYSQL_TYPE_LONG;
-	b.buffer = v;
-	b.is_null = is_null;
-	b.is_unsigned = 0;
-	return b;
-}
-
-void Check(int rc, MYSQL* conn, const char* what) {
-	if (rc != 0) {
-		throw std::runtime_error(std::string(what) + ": " + mysql_error(conn));
-	}
-}
-
 void CheckStmt(int rc, MYSQL_STMT* stmt, const char* what) {
 	if (rc != 0) {
 		throw std::runtime_error(std::string(what) + ": " + mysql_stmt_error(stmt));

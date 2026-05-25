@@ -2,6 +2,8 @@
 
 #include "utils/logger.h"
 #include "handler/auth_handler.h"
+#include "handler/problem_handler.h"
+#include "handler/submission_handler.h"
 
 namespace oj {
 
@@ -15,6 +17,8 @@ HttpServer::HttpServer(const oj::AppConfig& cfg) {
 	try {
 		pool_ = std::make_unique<MySqlPool>(cfg.mysql);
 		handler::RegisterAuthRoutes(router_, cfg.auth.jwt.secret, *pool_);
+		handler::RegisterProblemRoutes(router_, *pool_);
+		handler::RegisterSubmissionRoutes(router_, *pool_);
 	} catch (const std::exception& e) {
 		OJ_LOG_ERROR(std::string("failed init db or auth routes: ") + e.what());
 		throw;

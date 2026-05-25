@@ -41,6 +41,8 @@ target_sources(oj_core
 		src/router.cpp
 		src/middleware/auth.cpp
 		src/handler/auth_handler.cpp
+		src/handler/problem_handler.cpp
+		src/handler/submission_handler.cpp
 		src/judge/judge_manager.cpp
 )
 

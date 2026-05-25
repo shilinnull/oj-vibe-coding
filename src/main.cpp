@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
 		auto cfg = oj::Config::LoadFromFile("./config/config.yaml");
 		oj::Logger::Instance().Init(cfg.logging);
 
-		oj::HttpServer server;
+		oj::HttpServer server(cfg);
 		server.Listen(cfg.server.host.c_str(), cfg.server.port);
 		return 0;
 	} catch (const std::exception& e) {

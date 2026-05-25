@@ -13,6 +13,7 @@ find_library(CPPHTTPLIB_LIBRARY NAMES cpp-httplib libcpp-httplib httplib PATHS /
 
 find_package(yaml-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 # MySQL C client library
 find_package(PkgConfig REQUIRED)
@@ -23,6 +24,7 @@ target_sources(oj_core
 	PRIVATE
 		src/utils/config.cpp
 		src/utils/logger.cpp
+		src/utils/crypto.cpp
 		src/utils/json_helper.cpp
 		src/db/mysql_pool.cpp
 		src/db/dao/user_dao.cpp
@@ -37,6 +39,8 @@ target_sources(oj_core
 		src/model/language.cpp
 		src/server.cpp
 		src/router.cpp
+		src/middleware/auth.cpp
+		src/handler/auth_handler.cpp
 		src/judge/judge_manager.cpp
 )
 
@@ -53,6 +57,8 @@ target_link_libraries(oj_core
 		nlohmann_json::nlohmann_json
 		${MYSQLCLIENT_LIBRARIES}
 		${CPPHTTPLIB_LIBRARY}
+        OpenSSL::SSL
+        OpenSSL::Crypto
 )
 
 target_compile_options(oj_core PRIVATE -Wall -Wextra -Wpedantic)

@@ -450,18 +450,18 @@ CREATE TABLE submissions (
 - [x] **P0-7** 实现各 DAO 层（user_dao、problem_dao、submission_dao、test_case_dao、language_dao）
 
 ### P1 — 判题核心
-- [ ] **P1-1** 实现 judger CLI：编译模块（g++/gcc 调用）
-- [ ] **P1-2** 实现 judger CLI：沙箱执行（方案 A：nsjail + seccomp + cgroups + setrlimit）
-- [ ] **P1-3** 实现 judger CLI：输出比对（严格 diff）
-- [ ] **P1-4** 实现 judger CLI：结果汇总 JSON 输出
-- [ ] **P1-5** 实现 JudgeManager：队列 + 并发控制（4 上限） + fork/exec 调用 judger CLI
-- [ ] **P1-6** 准备 nsjail 配置（seccomp policy、挂载白名单/只读、网络隔离、cgroups 限制）
+- [x] **P1-1** 实现 judger CLI：编译模块（g++/gcc 调用）
+- [x] **P1-2** 实现 judger CLI：沙箱执行（nsjail + seccomp + cgroups + setrlimit）
+- [x] **P1-3** 实现 judger CLI：输出比对（严格 diff）
+- [x] **P1-4** 实现 judger CLI：结果汇总 JSON 输出
+- [x] **P1-5** 实现 JudgeManager：队列 + 并发控制（4 上限） + fork/exec 调用 judger CLI
+- [x] **P1-6** 准备 nsjail 配置（seccomp policy、挂载白名单/只读、网络隔离、cgroups 限制）
 
 ### P2 — 用户系统 & 鉴权
-- [ ] **P2-1** 实现密码哈希工具 `crypto.cpp/h`（bcrypt/argon2）
-- [ ] **P2-2** 实现注册/登录/登出 API
-- [ ] **P2-3** 实现 Auth 中间件（Session/Token 机制）
-- [ ] **P2-4** 实现 Handler 抽象基类 `handler_base.h`
+- [x] **P2-1** 实现密码哈希工具 `crypto.cpp/h`（bcrypt/argon2）
+- [x] **P2-2** 实现注册/登录/登出 API
+- [x] **P2-3** 实现 Auth 中间件（Session/Token 机制）
+- [x] **P2-4** 实现 Handler 抽象基类 `handler_base.h`
 
 ### P3 — 题目 & 提交 API
 - [ ] **P3-1** 实现 ProblemHandler：题目列表（分页）、题目详情

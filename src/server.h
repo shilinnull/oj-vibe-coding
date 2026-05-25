@@ -5,22 +5,25 @@
 #include <httplib.h>
 
 #include "router.h"
+#include "utils/config.h"
+#include "db/mysql_pool.h"
 
 namespace oj {
 
 class HttpServer {
  public:
-	HttpServer();
+ 	 explicit HttpServer(const AppConfig& cfg);
 
-	Router& router() { return router_; }
-	void MountRoutes();
+ 	Router& router() { return router_; }
+ 	void MountRoutes();
 
-	// 阻塞启动
-	void Listen(const char* host, int port);
+ 	// 阻塞启动
+ 	void Listen(const char* host, int port);
 
  private:
-	httplib::Server server_{};
-	Router router_{};
+ 	httplib::Server server_{};
+ 	Router router_{};
+	std::unique_ptr<MySqlPool> pool_{};
 };
 
 }  // namespace oj

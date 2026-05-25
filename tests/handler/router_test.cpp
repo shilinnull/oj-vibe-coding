@@ -130,7 +130,9 @@ TEST(RouterTest, MountsAllHttpMethods) {
 }
 
 TEST(HttpServerTest, RegistersHealthCheckRoute) {
-	oj::HttpServer server;
+	oj::AppConfig cfg;
+	cfg.auth.jwt.secret = "test-secret";
+	oj::HttpServer server(cfg);
 	httplib::Server raw_server;
 	server.router().Mount(raw_server);
 

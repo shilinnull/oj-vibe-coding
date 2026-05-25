@@ -10,6 +10,7 @@ int main(int argc, char** argv) {
 	(void)argv;
 
 	try {
+		// 启动顺序：先读配置，再初始化日志，最后构造并启动 HTTP 服务。
 		auto cfg = oj::Config::LoadFromFile("./config/config.yaml");
 		oj::Logger::Instance().Init(cfg.logging);
 

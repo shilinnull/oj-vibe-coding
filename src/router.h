@@ -8,15 +8,18 @@
 
 namespace oj {
 
+// 轻量级路由表：先把路由和回调保存起来，最后统一挂到 httplib::Server 上。
 class Router {
  public:
 	using Handler = std::function<void(const httplib::Request&, httplib::Response&)>;
 
+	// 下面四个接口只负责登记路由，不会立刻处理请求。
 	void Get(const std::string& pattern, Handler handler);
 	void Post(const std::string& pattern, Handler handler);
 	void Put(const std::string& pattern, Handler handler);
 	void Delete(const std::string& pattern, Handler handler);
 
+	// 把已登记的路由一次性注册到 httplib 的 server 上。
 	void Mount(httplib::Server& server) const;
 
  private:

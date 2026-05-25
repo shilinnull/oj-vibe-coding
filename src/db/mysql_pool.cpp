@@ -105,6 +105,7 @@ PooledMySqlConnection MySqlPool::Acquire() {
 		MYSQL* c = idle_.front();
 		idle_.pop();
 		lock.unlock();
+		// 复用之前的连接前先做一次 ping，避免拿到已经断掉的连接。
 		if (!IsConnectionAlive(c)) {
 			mysql_close(c);
 			lock.lock();
@@ -117,6 +118,7 @@ PooledMySqlConnection MySqlPool::Acquire() {
 	}
 
 	// Create new connection
+	// 空闲连接不够时才新建，避免无上限地创建 MySQL 连接。
 	++total_;
 	lock.unlock();
 	try {
@@ -145,6 +147,7 @@ void MySqlPool::Release(MYSQL* conn) {
 
 	if (!IsConnectionAlive(conn)) {
 		mysql_close(conn);
+		// 断开的连接不回池，顺便把总数减回去。
 		if (total_ > 0) {
 			--total_;
 		}

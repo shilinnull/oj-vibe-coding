@@ -9,6 +9,7 @@ namespace oj {
 using json = nlohmann::json;
 
 std::string GenerateJwt(const std::string& secret, long user_id, const std::string& username, const std::string& role, int expires_seconds) {
+    // JWT 由 header + payload + signature 三部分组成。
     json header = { {"alg", "HS256"}, {"typ", "JWT"} };
     auto now = std::chrono::system_clock::now();
     auto now_s = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
@@ -27,7 +28,7 @@ std::string GenerateJwt(const std::string& secret, long user_id, const std::stri
 }
 
 std::optional<AuthInfo> VerifyJwt(const std::string& secret, const std::string& token) {
-    // split
+    // 先拆分 token 的三段，再校验签名和过期时间。
     size_t p1 = token.find('.');
     if (p1 == std::string::npos) return std::nullopt;
     size_t p2 = token.find('.', p1 + 1);
@@ -62,6 +63,7 @@ std::optional<AuthInfo> VerifyJwt(const std::string& secret, const std::string& 
 }
 
 std::optional<AuthInfo> AuthenticateRequest(const std::string& secret, const httplib::Request& req) {
+    // 约定用 Bearer token 传递登录态。
     auto it = req.headers.find("Authorization");
     if (it == req.headers.end()) return std::nullopt;
     const std::string& v = it->second;

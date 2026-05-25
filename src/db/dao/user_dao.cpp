@@ -9,6 +9,7 @@
 namespace oj {
 namespace {
 
+// MySQL C API 的查询结果需要手动绑定输出缓冲区，这里封装成小工具降低重复代码量。
 struct StringOut {
 	std::vector<char> buf;
 	unsigned long len{0};
@@ -97,6 +98,7 @@ std::int64_t UserDao::CreateUser(const std::string& username,
 	MYSQL_STMT* stmt = mysql_stmt_init(c);
 	if (!stmt) throw std::runtime_error("mysql_stmt_init failed");
 	try {
+		// 用预编译语句写入，避免手拼 SQL，也能减少注入风险。
 		CheckStmt(mysql_stmt_prepare(stmt, sql, std::strlen(sql)), stmt, "prepare");
 
 		unsigned long l1 = 0, l2 = 0, l3 = 0, l4 = 0, l5 = 0;
@@ -127,6 +129,7 @@ std::optional<User> UserDao::GetByUsername(const std::string& username) {
 	if (!stmt) throw std::runtime_error("mysql_stmt_init failed");
 
 	try {
+		// 查单个用户时，先把参数和返回列都绑定好，再执行和取结果。
 		CheckStmt(mysql_stmt_prepare(stmt, sql, std::strlen(sql)), stmt, "prepare");
 		unsigned long l1 = 0;
 		MYSQL_BIND inb[1] = {BindStringIn(username, &l1)};
@@ -185,6 +188,7 @@ std::optional<User> UserDao::GetById(std::int64_t id) {
 	if (!stmt) throw std::runtime_error("mysql_stmt_init failed");
 
 	try {
+		// 逻辑和 GetByUsername 一样，只是 WHERE 条件换成主键 id。
 		CheckStmt(mysql_stmt_prepare(stmt, sql, std::strlen(sql)), stmt, "prepare");
 
 		std::int64_t in_id = id;
@@ -240,6 +244,7 @@ bool UserDao::UpdateStatus(std::int64_t id, const std::string& status) {
 	MYSQL_STMT* stmt = mysql_stmt_init(c);
 	if (!stmt) throw std::runtime_error("mysql_stmt_init failed");
 	try {
+		// 更新状态只改一列，返回值表示这次是否真的影响到了记录。
 		CheckStmt(mysql_stmt_prepare(stmt, sql, std::strlen(sql)), stmt, "prepare");
 
 		unsigned long l1 = 0;

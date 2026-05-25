@@ -16,6 +16,7 @@ using json = nlohmann::json;
 
 static void RegisterHandler(const httplib::Request& req, httplib::Response& res, MySqlPool& pool, const std::string& jwt_secret) {
     try {
+        // 注册接口只接受用户名、密码和可选邮箱，其他字段由服务端补齐。
         auto body = json::parse(req.body);
         std::string username = body.value("username", std::string());
         std::string password = body.value("password", std::string());
@@ -33,6 +34,7 @@ static void RegisterHandler(const httplib::Request& req, httplib::Response& res,
             return;
         }
         std::string hash = GeneratePasswordHash(password);
+        // 新用户默认是 student / active，登录成功后直接返回 token。
         long id = dao.CreateUser(username, hash, email, "student", "active");
         std::string token = GenerateJwt(jwt_secret, id, username, "student", 3600);
         json out = { {"id", id}, {"token", token} };
@@ -46,6 +48,7 @@ static void RegisterHandler(const httplib::Request& req, httplib::Response& res,
 
 static void LoginHandler(const httplib::Request& req, httplib::Response& res, MySqlPool& pool, const std::string& jwt_secret) {
     try {
+        // 登录先查用户，再比对密码哈希，避免明文密码入库和传递。
         auto body = json::parse(req.body);
         std::string username = body.value("username", std::string());
         std::string password = body.value("password", std::string());
@@ -78,11 +81,12 @@ static void LoginHandler(const httplib::Request& req, httplib::Response& res, My
 }
 
 static void LogoutHandler(const httplib::Request& /*req*/, httplib::Response& res) {
-    // Stateless JWT: logout is a no-op unless you implement token blacklist
+    // JWT 是无状态的：如果不做 token 黑名单，退出本质上只是前端删 token。
     res.set_content(R"({"ok":true})", "application/json");
 }
 
 void RegisterAuthRoutes(Router& router, const std::string& jwt_secret, MySqlPool& pool) {
+    // 认证相关接口统一放在 /api/auth 下，方便前端和网关记忆。
     router.Post("/api/auth/register", [&](const httplib::Request& req, httplib::Response& res) {
         RegisterHandler(req, res, pool, jwt_secret);
     });

@@ -4,3 +4,6 @@
 build/
 
 .github/
+
+*.in
+*.out

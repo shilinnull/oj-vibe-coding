@@ -13,7 +13,7 @@
 
 namespace {
 
-constexpr const char* kDefaultConfigPath = "../config/config.yaml";
+constexpr const char* kDefaultConfigPath = "./config/config.yaml";
 constexpr const char* kDefaultUsername = "admin";
 constexpr const char* kDefaultPassword = "admin123";
 
@@ -168,6 +168,62 @@ void DeleteUserById(MYSQL* conn, std::int64_t id) {
 	}
 }
 
+void UpdateAdminUser(MYSQL* conn,
+					   std::int64_t id,
+					   const std::string& username,
+					   const std::string& password_hash) {
+	MYSQL_STMT* stmt = mysql_stmt_init(conn);
+	if (stmt == nullptr) {
+		throw std::runtime_error("mysql_stmt_init failed");
+	}
+
+	try {
+		const char* sql = "UPDATE users SET username=?, password=?, email=?, role='admin', status='active' WHERE id=?";
+		if (mysql_stmt_prepare(stmt, sql, static_cast<unsigned long>(std::strlen(sql))) != 0) {
+			throw std::runtime_error(std::string("mysql_stmt_prepare failed: ") + mysql_stmt_error(stmt));
+		}
+
+		std::string email;
+		unsigned long username_len = static_cast<unsigned long>(username.size());
+		unsigned long password_len = static_cast<unsigned long>(password_hash.size());
+		unsigned long email_len = static_cast<unsigned long>(email.size());
+
+		MYSQL_BIND binds[4];
+		std::memset(binds, 0, sizeof(binds));
+
+		binds[0].buffer_type = MYSQL_TYPE_STRING;
+		binds[0].buffer = const_cast<char*>(username.data());
+		binds[0].buffer_length = username_len;
+		binds[0].length = &username_len;
+
+		binds[1].buffer_type = MYSQL_TYPE_STRING;
+		binds[1].buffer = const_cast<char*>(password_hash.data());
+		binds[1].buffer_length = password_len;
+		binds[1].length = &password_len;
+
+		binds[2].buffer_type = MYSQL_TYPE_STRING;
+		binds[2].buffer = const_cast<char*>(email.c_str());
+		binds[2].buffer_length = email_len;
+		binds[2].length = &email_len;
+
+		binds[3].buffer_type = MYSQL_TYPE_LONGLONG;
+		binds[3].buffer = &id;
+		binds[3].is_unsigned = 0;
+
+		if (mysql_stmt_bind_param(stmt, binds) != 0) {
+			throw std::runtime_error(std::string("mysql_stmt_bind_param failed: ") + mysql_stmt_error(stmt));
+		}
+		if (mysql_stmt_execute(stmt) != 0) {
+			throw std::runtime_error(std::string("mysql_stmt_execute failed: ") + mysql_stmt_error(stmt));
+		}
+
+		mysql_stmt_close(stmt);
+	} catch (...) {
+		mysql_stmt_close(stmt);
+		throw;
+	}
+}
+
 std::int64_t InsertAdminUser(MYSQL* conn,
 							   const std::string& username,
 							   const std::string& password_hash) {
@@ -267,16 +323,18 @@ int main(int argc, char* argv[]) {
 
 		const std::int64_t existing_id = FindUserIdByUsername(conn.conn, username);
 		if (existing_id >= 0) {
-			DeleteUserById(conn.conn, existing_id);
-			std::cout << "Deleted existing admin account: " << username << " (id=" << existing_id << ")\n";
+			UpdateAdminUser(conn.conn, existing_id, username, password_hash);
+			std::cout << "Updated existing admin account: " << username << " (id=" << existing_id << ")\n";
 		} else {
-			std::cout << "No existing admin account found, inserting a new one.\n";
-		}
+			const std::int64_t new_id = InsertAdminUser(conn.conn, username, password_hash);
+			CommitTransaction(conn.conn);
 
-		const std::int64_t new_id = InsertAdminUser(conn.conn, username, password_hash);
+			std::cout << "Admin account ready: username=" << username << ", id=" << new_id << '\n';
+			return 0;
+		}
 		CommitTransaction(conn.conn);
 
-		std::cout << "Admin account ready: username=" << username << ", id=" << new_id << '\n';
+		std::cout << "Admin account ready: username=" << username << ", id=" << existing_id << '\n';
 		return 0;
 	} catch (const std::exception& ex) {
 		std::cerr << "register_admin failed: " << ex.what() << '\n';

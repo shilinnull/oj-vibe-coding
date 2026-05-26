@@ -2,6 +2,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include <mysql/mysql.h>
 #include <fstream>
@@ -45,6 +46,13 @@ static std::string Escape(MYSQL* conn, const std::string& s) {
     return out;
 }
 
+static std::string CurrentTimestampSuffix() {
+    using namespace std::chrono;
+    auto now = system_clock::now();
+    auto sec = duration_cast<seconds>(now.time_since_epoch()).count();
+    return std::to_string(sec);
+}
+
 int main() {
     try {
         auto cfg = Config::LoadFromFile(ResolveConfigPath());
@@ -72,15 +80,23 @@ int main() {
             ExecOrDie(conn, q);
         }
 
-        // Recreate basic users: admin and ui_user_20260526
+        // Recreate basic users: admin and several student users with timestamp suffix.
         std::cout << "Inserting users...\n";
         std::string admin_pass = GeneratePasswordHash("adminpass");
         std::string user_pass = GeneratePasswordHash("pass1234");
+        std::string ts_suffix = CurrentTimestampSuffix();
+        std::vector<std::string> seeded_users;
+        const int kStudentUserCount = 6;
 
         std::string admin_sql = "INSERT INTO users (username, password, email, role, status) VALUES ('admin', '" + Escape(conn, admin_pass) + "', 'admin@example.com', 'admin', 'active')";
         ExecOrDie(conn, admin_sql);
-        std::string ui_sql = "INSERT INTO users (username, password, email, role, status) VALUES ('ui_user_20260526', '" + Escape(conn, user_pass) + "', 'ui@example.com', 'student', 'active')";
-        ExecOrDie(conn, ui_sql);
+        for (int i = 1; i <= kStudentUserCount; ++i) {
+            std::string username = "ui_user_" + ts_suffix + "_" + std::to_string(i);
+            std::string email = "ui_" + ts_suffix + "_" + std::to_string(i) + "@example.com";
+            std::string ui_sql = "INSERT INTO users (username, password, email, role, status) VALUES ('" + Escape(conn, username) + "', '" + Escape(conn, user_pass) + "', '" + Escape(conn, email) + "', 'student', 'active')";
+            ExecOrDie(conn, ui_sql);
+            seeded_users.push_back(username);
+        }
 
         // Insert languages
         std::cout << "Inserting languages...\n";
@@ -126,8 +142,12 @@ int main() {
         // Prepare some sample submissions (only a few statuses)
         std::cout << "Inserting sample submissions...\n";
 
-        // find ui user id
-        ExecOrDie(conn, "SELECT id FROM users WHERE username = 'ui_user_20260526' LIMIT 1");
+        // find one seeded ui user id
+        if (seeded_users.empty()) {
+            std::cerr << "no seeded users found" << std::endl;
+            return 1;
+        }
+        ExecOrDie(conn, "SELECT id FROM users WHERE username = '" + Escape(conn, seeded_users.front()) + "' LIMIT 1");
         res = mysql_store_result(conn);
         long ui_id = 0;
         if (res) {

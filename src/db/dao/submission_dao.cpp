@@ -271,6 +271,77 @@ std::vector<Submission> SubmissionDao::ListByUser(std::int64_t user_id, int limi
 	}
 }
 
+std::vector<Submission> SubmissionDao::ListAll(int limit, int offset) {
+	auto conn = pool_.Acquire();
+	MYSQL* c = reinterpret_cast<MYSQL*>(conn.get());
+	const char* sql =
+			"SELECT id,user_id,problem_id,language_id,mode,status,time_ms,memory_kb,created_at "
+			"FROM submissions ORDER BY id DESC LIMIT ? OFFSET ?";
+	MYSQL_STMT* stmt = mysql_stmt_init(c);
+	if (!stmt) throw std::runtime_error("mysql_stmt_init failed");
+
+	try {
+		CheckStmt(mysql_stmt_prepare(stmt, sql, std::strlen(sql)), stmt, "prepare");
+		int in_limit = limit;
+		int in_offset = offset;
+		MYSQL_BIND inb[2] = {BindIntIn(&in_limit), BindIntIn(&in_offset)};
+		CheckStmt(mysql_stmt_bind_param(stmt, inb), stmt, "bind_param");
+		CheckStmt(mysql_stmt_execute(stmt), stmt, "execute");
+		CheckStmt(mysql_stmt_store_result(stmt), stmt, "store_result");
+
+		std::int64_t out_id = 0;
+		bool null_id = 0;
+		std::int64_t out_uid = 0;
+		bool null_uid = 0;
+		std::int64_t out_pid = 0;
+		bool null_pid = 0;
+		int out_lid = 0;
+		bool null_lid = 0;
+		StringOut out_mode(16);
+		StringOut out_status(32);
+		int time_ms = 0;
+		bool null_time = false;
+		int mem_kb = 0;
+		bool null_mem = false;
+		StringOut out_created(32);
+
+		MYSQL_BIND outb[9] = {BindInt64Out(&out_id, &null_id),
+							BindInt64Out(&out_uid, &null_uid),
+							BindInt64Out(&out_pid, &null_pid),
+							BindIntOut(&out_lid, &null_lid),
+							BindStringOut(out_mode),
+							BindStringOut(out_status),
+							BindIntOut(&time_ms, &null_time),
+							BindIntOut(&mem_kb, &null_mem),
+							BindStringOut(out_created)};
+		CheckStmt(mysql_stmt_bind_result(stmt, outb), stmt, "bind_result");
+
+		std::vector<Submission> res;
+		while (true) {
+			int rc = mysql_stmt_fetch(stmt);
+			if (rc == MYSQL_NO_DATA) break;
+			CheckStmt(rc, stmt, "fetch");
+			Submission s;
+			s.id = out_id;
+			s.user_id = out_uid;
+			s.problem_id = out_pid;
+			s.language_id = out_lid;
+			s.mode = out_mode.str();
+			s.status = out_status.str();
+			s.time_ms = time_ms;
+			s.memory_kb = mem_kb;
+			s.created_at = out_created.str();
+			res.push_back(std::move(s));
+		}
+
+		mysql_stmt_close(stmt);
+		return res;
+	} catch (...) {
+		mysql_stmt_close(stmt);
+		throw;
+	}
+}
+
 bool SubmissionDao::UpdateResult(std::int64_t id,
 																const std::string& status,
 																const std::string& result_json,

@@ -150,6 +150,27 @@ bool ProblemDao::Update(std::int64_t id, const Problem& p) {
 	}
 }
 
+bool ProblemDao::Delete(std::int64_t id) {
+	auto conn = pool_.Acquire();
+	MYSQL* c = reinterpret_cast<MYSQL*>(conn.get());
+	const char* sql = "DELETE FROM problems WHERE id=?";
+	MYSQL_STMT* stmt = mysql_stmt_init(c);
+	if (!stmt) throw std::runtime_error("mysql_stmt_init failed");
+	try {
+		CheckStmt(mysql_stmt_prepare(stmt, sql, std::strlen(sql)), stmt, "prepare");
+		std::int64_t in_id = id;
+		MYSQL_BIND b[1] = {BindInt64In(&in_id)};
+		CheckStmt(mysql_stmt_bind_param(stmt, b), stmt, "bind_param");
+		CheckStmt(mysql_stmt_execute(stmt), stmt, "execute");
+		const my_ulonglong affected = mysql_stmt_affected_rows(stmt);
+		mysql_stmt_close(stmt);
+		return affected > 0;
+	} catch (...) {
+		mysql_stmt_close(stmt);
+		throw;
+	}
+}
+
 std::optional<Problem> ProblemDao::GetById(std::int64_t id) {
 	auto conn = pool_.Acquire();
 	MYSQL* c = reinterpret_cast<MYSQL*>(conn.get());

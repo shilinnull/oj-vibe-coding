@@ -27,9 +27,16 @@ function toErrorMessage(payload, fallback = "请求失败") {
 async function request(path, options = {}) {
 	const token = getToken();
 	const headers = {
-		"Content-Type": "application/json",
 		...(options.headers || {}),
 	};
+	const isFormData =
+		typeof FormData !== "undefined" &&
+		options.body &&
+		options.body instanceof FormData;
+	const hasContentType = Object.keys(headers).some((k) => k.toLowerCase() === "content-type");
+	if (!hasContentType && options.body && !isFormData && typeof options.body === "string") {
+		headers["Content-Type"] = "application/json";
+	}
 	if (token) {
 		headers.Authorization = `Bearer ${token}`;
 	}
@@ -111,10 +118,103 @@ export function getSubmissionsByUser(userId, { limit = 20, offset = 0 } = {}) {
 	return request(`/submissions?${params.toString()}`);
 }
 
+export function listLanguages() {
+	return request("/languages");
+}
+
+function mapLanguageMonaco(lang) {
+	const ext = String(lang.extension || "").toLowerCase();
+	if (ext === "cpp" || ext === "cc" || ext === "cxx") return "cpp";
+	if (ext === "c") return "c";
+	return "plaintext";
+}
+
 export async function getLanguageOptions() {
-	// 当前后端没有开放公开语言列表，这里给出常见默认值并支持本地扩展。
-	return [
-		{ id: 1, name: "C++17", monacoLang: "cpp", extension: "cpp" },
-		{ id: 2, name: "C11", monacoLang: "c", extension: "c" },
-	];
+	try {
+		const payload = await listLanguages();
+		const items = Array.isArray(payload?.items) ? payload.items : [];
+		return items.map((lang) => ({
+			...lang,
+			monacoLang: mapLanguageMonaco(lang),
+		}));
+	} catch {
+		return [
+			{ id: 1, name: "C++17", monacoLang: "cpp", extension: "cpp" },
+			{ id: 2, name: "C11", monacoLang: "c", extension: "c" },
+		];
+	}
+}
+
+// ---------------- Admin API ----------------
+
+export function adminCreateProblem(problem) {
+	return request("/admin/problems", {
+		method: "POST",
+		body: JSON.stringify(problem),
+	});
+}
+
+export function adminGetProblem(problemId) {
+	return request(`/admin/problems/${problemId}`);
+}
+
+export function adminUpdateProblem(problemId, problem) {
+	return request(`/admin/problems/${problemId}`,
+		{
+			method: "PUT",
+			body: JSON.stringify(problem),
+		});
+}
+
+export function adminDeleteProblem(problemId) {
+	return request(`/admin/problems/${problemId}`, { method: "DELETE" });
+}
+
+export function adminAddTestcase(problemId, testcase) {
+	return request(`/admin/problems/${problemId}/testcases`, {
+		method: "POST",
+		body: JSON.stringify(testcase),
+	});
+}
+
+export function adminUploadTestcasesZip(problemId, file) {
+	const fd = new FormData();
+	fd.append("file", file);
+	return request(`/admin/problems/${problemId}/testcases/upload`, {
+		method: "POST",
+		body: fd,
+	});
+}
+
+export function adminListLanguages() {
+	return request("/admin/languages");
+}
+
+export function adminCreateLanguage(lang) {
+	return request("/admin/languages", {
+		method: "POST",
+		body: JSON.stringify(lang),
+	});
+}
+
+export function adminUpdateLanguage(langId, lang) {
+	return request(`/admin/languages/${langId}`, {
+		method: "PUT",
+		body: JSON.stringify(lang),
+	});
+}
+
+export function adminListSubmissions({ limit = 20, offset = 0 } = {}) {
+	const params = new URLSearchParams({
+		limit: String(limit),
+		offset: String(offset),
+	});
+	return request(`/admin/submissions?${params.toString()}`);
+}
+
+export function adminUpdateUserStatus(userId, status) {
+	return request(`/admin/users/${userId}/status`, {
+		method: "PUT",
+		body: JSON.stringify({ status }),
+	});
 }

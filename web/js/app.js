@@ -4,12 +4,16 @@ import { initProblemListPage } from "./components/problem-list.js";
 import { initProblemDetailPage } from "./components/problem-detail.js";
 import { initSubmissionResultPage } from "./components/submission-result.js";
 import { initHistoryPage } from "./components/history.js";
-import { clearAuth, getCurrentUser, parseHashRoute, showToast, toHash } from "./utils.js";
+import { initAdminDashboardPage } from "./components/admin/dashboard.js";
+import { initAdminProblemEditPage } from "./components/admin/problem-edit.js";
+import { initAdminLanguageConfigPage } from "./components/admin/language-config.js";
+import { clearAuth, getCurrentUser, isAdmin, parseHashRoute, showToast, toHash } from "./utils.js";
 
 const app = document.getElementById("app");
 const userBadge = document.getElementById("user-badge");
 const logoutBtn = document.getElementById("logout-btn");
 const nav = document.getElementById("topnav");
+const adminLink = document.getElementById("admin-link");
 
 const routeTemplates = {
 	login: "./pages/login.html",
@@ -18,6 +22,9 @@ const routeTemplates = {
 	problemDetail: "./pages/problem-detail.html",
 	submissionResult: "./pages/submission-result.html",
 	history: "./pages/history.html",
+	adminDashboard: "./pages/admin/dashboard.html",
+	adminProblemEdit: "./pages/admin/problem-edit.html",
+	adminLanguageConfig: "./pages/admin/language-config.html",
 };
 
 const templateCache = new Map();
@@ -27,6 +34,9 @@ function setUserUI() {
 	const user = getCurrentUser();
 	userBadge.textContent = user.isAuthed ? `${user.username || "用户"}` : "未登录";
 	logoutBtn.style.display = user.isAuthed ? "inline-flex" : "none";
+	if (adminLink) {
+		adminLink.style.display = isAdmin() ? "inline-flex" : "none";
+	}
 }
 
 function resolveRoute(path) {
@@ -50,6 +60,15 @@ function resolveRoute(path) {
 	}
 	if (path === "/history") {
 		return { name: "history", params: {} };
+	}
+	if (path === "/admin") {
+		return { name: "adminDashboard", params: {} };
+	}
+	if (path === "/admin/problems") {
+		return { name: "adminProblemEdit", params: {} };
+	}
+	if (path === "/admin/languages") {
+		return { name: "adminLanguageConfig", params: {} };
 	}
 	return { name: "notFound", params: {} };
 }
@@ -88,6 +107,11 @@ async function render() {
 		navigate("/login");
 		return;
 	}
+	if (route.name.startsWith("admin") && !isAdmin()) {
+		showToast("需要管理员权限", "error");
+		navigate("/problems");
+		return;
+	}
 
 	try {
 		if (typeof cleanupCurrentView === "function") {
@@ -123,6 +147,15 @@ async function render() {
 				break;
 			case "history":
 				cleanupCurrentView = initHistoryPage(ctx);
+				break;
+			case "adminDashboard":
+				cleanupCurrentView = initAdminDashboardPage(ctx);
+				break;
+			case "adminProblemEdit":
+				cleanupCurrentView = initAdminProblemEditPage(ctx);
+				break;
+			case "adminLanguageConfig":
+				cleanupCurrentView = initAdminLanguageConfigPage(ctx);
 				break;
 			default:
 				app.innerHTML = "<div class=\"card\"><h2>404</h2><p class=\"muted\">未找到页面。</p></div>";

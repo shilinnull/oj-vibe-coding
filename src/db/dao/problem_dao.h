@@ -16,6 +16,7 @@ class ProblemDao {
 
 	std::int64_t Create(const Problem& p);
 	bool Update(std::int64_t id, const Problem& p);
+	bool Delete(std::int64_t id);
 	std::optional<Problem> GetById(std::int64_t id);
 
 	std::vector<Problem> List(int limit, int offset, const std::string& status_filter = "");

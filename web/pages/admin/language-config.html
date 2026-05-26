@@ -1,1 +1,76 @@
-<!-- placeholder: admin language-config.html -->
+<section class="stack">
+	<div class="page-head">
+		<h1>语言配置</h1>
+		<span class="muted">管理可用语言（影响提交页面下拉）</span>
+	</div>
+
+	<div class="card toolbar">
+		<a class="btn btn-ghost" href="#/admin" data-link>返回仪表盘</a>
+		<a class="btn btn-ghost" href="#/admin/problems" data-link>题目管理</a>
+		<button id="admin-lang-refresh" type="button" class="btn btn-primary">刷新</button>
+		<div id="admin-lang-loading" class="loading" style="display: none;">
+			<span class="spinner"></span>
+			<span>加载中...</span>
+		</div>
+	</div>
+
+	<div class="grid-two">
+		<div class="card">
+			<h2>语言列表</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>ID</th>
+						<th>名称</th>
+						<th>扩展名</th>
+						<th>状态</th>
+						<th>操作</th>
+						<th>说明</th>
+					</tr>
+				</thead>
+				<tbody id="admin-lang-tbody">
+					<tr>
+						<td colspan="6" class="muted">加载中...</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div class="card">
+			<h2>编辑语言</h2>
+			<div class="stack">
+				<div>
+					<label for="admin-lang-id">语言 ID</label>
+					<input id="admin-lang-id" disabled placeholder="新建后自动生成" />
+				</div>
+				<div>
+					<label for="admin-lang-name">名称</label>
+					<input id="admin-lang-name" placeholder="例如 C++17" />
+				</div>
+				<div>
+					<label for="admin-lang-ext">扩展名</label>
+					<input id="admin-lang-ext" placeholder="例如 cpp" />
+				</div>
+				<div>
+					<label for="admin-lang-compile">编译命令</label>
+					<input id="admin-lang-compile" placeholder="例如 g++ -std=c++17 main.cpp -O2 -o main" />
+				</div>
+				<div>
+					<label for="admin-lang-run">运行命令</label>
+					<input id="admin-lang-run" placeholder="例如 ./main" />
+				</div>
+				<div>
+					<label style="display: flex; align-items: center; gap: 8px;">
+						<input id="admin-lang-enabled" type="checkbox" checked />
+						<span>启用</span>
+					</label>
+				</div>
+				<div class="toolbar">
+					<button id="admin-lang-save" type="button" class="btn btn-primary">保存</button>
+					<button id="admin-lang-new" type="button" class="btn btn-ghost">新建</button>
+				</div>
+				<p class="muted">建议扩展名填 <strong>cpp</strong> 或 <strong>c</strong>，以获得 Monaco 高亮。</p>
+			</div>
+		</div>
+	</div>
+</section>

@@ -25,7 +25,7 @@ constexpr const char* kMysqlHost = "127.0.0.1";
 constexpr int kMysqlPort = 3306;
 constexpr const char* kMysqlUser = "shilin";
 constexpr const char* kMysqlPassword = "123456";
-constexpr const char* kMysqlDatabase = "shilin";
+constexpr const char* kMysqlDatabase = "oj";
 
 std::string MakeUniqueSuffix() {
 	auto now = std::chrono::steady_clock::now().time_since_epoch().count();

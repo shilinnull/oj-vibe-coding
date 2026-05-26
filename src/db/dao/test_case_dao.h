@@ -15,6 +15,7 @@ class TestCaseDao {
 
 	std::int64_t Add(const TestCase& tc);
 	std::vector<TestCase> ListByProblem(std::int64_t problem_id, bool only_sample);
+	int DeleteByProblem(std::int64_t problem_id, bool only_non_sample);
 
  private:
 	MySqlPool& pool_;

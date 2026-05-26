@@ -491,14 +491,14 @@ CREATE TABLE submissions (
 - [x] **P4-7** 实现 API 请求封装（api.js）与错误处理
 
 ### P5 — 管理后台
-- [ ] **P5-1** 实现 AdminHandler：题目 CRUD（含 Markdown 渲染预览）
-- [ ] **P5-2** 实现 AdminHandler：测试用例逐条录入 + zip 上传解压
-- [ ] **P5-3** 实现 AdminHandler：语言配置 CRUD
-- [ ] **P5-4** 实现 AdminHandler：查看所有提交记录
-- [ ] **P5-5** 实现用户管理（禁用/解封）
-- [ ] **P5-6** 管理员前端管理后台页面
+- [x] **P5-1** 实现 AdminHandler：题目 CRUD（含 Markdown 渲染预览）
+- [x] **P5-2** 实现 AdminHandler：测试用例逐条录入 + zip 上传解压
+- [x] **P5-3** 实现 AdminHandler：语言配置 CRUD
+- [x] **P5-4** 实现 AdminHandler：查看所有提交记录
+- [x] **P5-5** 实现用户管理（禁用/解封）
+- [x] **P5-6** 管理员前端管理后台页面
 
-### P6 — 打磨 & 预迁移
+### P6 — 打磨
 - [ ] **P6-1** 完善错误页面与全局异常处理
 - [ ] **P6-2** 判题超时、系统异常等边缘案例完善
 - [ ] **P6-3** 性能优化：数据库索引、连接复用

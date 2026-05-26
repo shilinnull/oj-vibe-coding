@@ -201,4 +201,28 @@ std::vector<TestCase> TestCaseDao::ListByProblem(std::int64_t problem_id, bool o
 	}
 }
 
+int TestCaseDao::DeleteByProblem(std::int64_t problem_id, bool only_non_sample) {
+	auto conn = pool_.Acquire();
+	MYSQL* c = reinterpret_cast<MYSQL*>(conn.get());
+	const char* sql_all = "DELETE FROM test_cases WHERE problem_id=?";
+	const char* sql_non_sample = "DELETE FROM test_cases WHERE problem_id=? AND is_sample=0";
+	const char* sql = only_non_sample ? sql_non_sample : sql_all;
+
+	MYSQL_STMT* stmt = mysql_stmt_init(c);
+	if (!stmt) throw std::runtime_error("mysql_stmt_init failed");
+	try {
+		CheckStmt(mysql_stmt_prepare(stmt, sql, std::strlen(sql)), stmt, "prepare");
+		std::int64_t pid = problem_id;
+		MYSQL_BIND inb[1] = {BindInt64In(&pid)};
+		CheckStmt(mysql_stmt_bind_param(stmt, inb), stmt, "bind_param");
+		CheckStmt(mysql_stmt_execute(stmt), stmt, "execute");
+		const my_ulonglong affected = mysql_stmt_affected_rows(stmt);
+		mysql_stmt_close(stmt);
+		return static_cast<int>(affected);
+	} catch (...) {
+		mysql_stmt_close(stmt);
+		throw;
+	}
+}
+
 }  // namespace oj

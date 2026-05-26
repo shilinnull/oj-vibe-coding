@@ -1,1 +1,156 @@
-<!-- placeholder: admin problem-edit.html -->
+<section class="stack">
+	<div class="page-head">
+		<h1>题目管理</h1>
+		<span class="muted">创建/编辑题目与用例</span>
+	</div>
+
+	<div class="card toolbar">
+		<a class="btn btn-ghost" href="#/admin" data-link>返回仪表盘</a>
+		<a class="btn btn-ghost" href="#/admin/languages" data-link>语言配置</a>
+		<div id="admin-problem-loading" class="loading" style="display: none;">
+			<span class="spinner"></span>
+			<span>加载中...</span>
+		</div>
+	</div>
+
+	<div class="grid-two">
+		<div class="card">
+			<h2>选择题目</h2>
+			<div class="stack">
+				<div>
+					<label for="admin-problem-select">题目</label>
+					<select id="admin-problem-select"></select>
+				</div>
+				<div class="toolbar">
+					<button id="admin-problem-new" type="button" class="btn btn-ghost">新建</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="card">
+			<h2>编辑题目</h2>
+			<div class="stack">
+				<div>
+					<label for="admin-problem-id">题目 ID</label>
+					<input id="admin-problem-id" disabled placeholder="新建后自动生成" />
+				</div>
+				<div>
+					<label for="admin-title">标题</label>
+					<input id="admin-title" placeholder="例如 Two Sum" />
+				</div>
+				<div class="grid-two">
+					<div>
+						<label for="admin-difficulty">难度</label>
+						<select id="admin-difficulty">
+							<option value="easy">easy</option>
+							<option value="medium" selected>medium</option>
+							<option value="hard">hard</option>
+						</select>
+					</div>
+					<div>
+						<label for="admin-status">状态</label>
+						<select id="admin-status">
+							<option value="draft" selected>draft</option>
+							<option value="published">published</option>
+						</select>
+					</div>
+				</div>
+				<div class="grid-two">
+					<div>
+						<label for="admin-time">时间限制 (ms)</label>
+						<input id="admin-time" inputmode="numeric" value="1000" />
+					</div>
+					<div>
+						<label for="admin-memory">内存限制 (KB)</label>
+						<input id="admin-memory" inputmode="numeric" value="262144" />
+					</div>
+				</div>
+				<div>
+					<label for="admin-description">题面</label>
+					<textarea id="admin-description" placeholder="支持纯文本（MVP）"></textarea>
+				</div>
+				<div class="toolbar">
+					<button id="admin-problem-save" type="button" class="btn btn-primary">保存</button>
+					<button id="admin-problem-delete" type="button" class="btn btn-accent">删除</button>
+					<button id="admin-problem-preview" type="button" class="btn btn-ghost">预览</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="card">
+		<h2>用例</h2>
+		<div class="grid-two">
+			<div class="stack">
+				<div class="toolbar">
+					<label style="margin: 0;">新增用例</label>
+					<span class="muted">新增不会删除现有用例</span>
+				</div>
+				<div class="grid-two">
+					<div>
+						<label for="admin-tc-order">排序</label>
+						<input id="admin-tc-order" inputmode="numeric" placeholder="例如 1" />
+					</div>
+					<div>
+						<label style="display: flex; align-items: center; gap: 8px; margin-top: 28px;">
+							<input id="admin-tc-sample" type="checkbox" />
+							<span>样例用例</span>
+						</label>
+					</div>
+				</div>
+				<div>
+					<label for="admin-tc-in">输入 (input)</label>
+					<textarea id="admin-tc-in" placeholder="输入内容"></textarea>
+				</div>
+				<div>
+					<label for="admin-tc-out">输出 (output)</label>
+					<textarea id="admin-tc-out" placeholder="输出内容"></textarea>
+				</div>
+				<div class="toolbar">
+					<button id="admin-add-tc" type="button" class="btn btn-primary">添加</button>
+				</div>
+			</div>
+
+			<div class="stack">
+				<div class="toolbar">
+					<label style="margin: 0;">Zip 导入</label>
+					<span class="muted">会替换所有非样例用例</span>
+				</div>
+				<div>
+					<label for="admin-zip-file">选择 zip</label>
+					<input id="admin-zip-file" type="file" accept=".zip" />
+				</div>
+				<div class="toolbar">
+					<button id="admin-upload-zip" type="button" class="btn btn-accent">上传并导入</button>
+					<div id="admin-zip-loading" class="loading" style="display: none;">
+						<span class="spinner"></span>
+						<span>处理中...</span>
+					</div>
+				</div>
+				<p class="muted">支持 zip 内任意目录层级的 <strong>*.in / *.out</strong> 成对文件（例如 1.in/1.out）。</p>
+			</div>
+		</div>
+
+		<table>
+			<thead>
+				<tr>
+					<th>ID</th>
+					<th>样例</th>
+					<th>排序</th>
+					<th>输入</th>
+					<th>输出</th>
+				</tr>
+			</thead>
+			<tbody id="admin-testcases-tbody">
+				<tr>
+					<td colspan="5" class="muted">请选择题目以查看用例</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<div class="card">
+		<h2>预览</h2>
+		<div id="admin-preview" class="md-block muted">点击“预览”生成静态预览。</div>
+	</div>
+</section>

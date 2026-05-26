@@ -2,7 +2,25 @@ const STORAGE_KEYS = {
 	token: "oj_token",
 	userId: "oj_user_id",
 	username: "oj_username",
+	role: "oj_role",
 };
+
+function base64UrlToBase64(str) {
+	return String(str || "").replace(/-/g, "+").replace(/_/g, "/");
+}
+
+function decodeJwtPayload(token) {
+	try {
+		const parts = String(token || "").split(".");
+		if (parts.length < 2) return null;
+		const b64 = base64UrlToBase64(parts[1]);
+		const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+		const jsonText = atob(padded);
+		return JSON.parse(jsonText);
+	} catch {
+		return null;
+	}
+}
 
 export function getToken() {
 	return localStorage.getItem(STORAGE_KEYS.token) || "";
@@ -11,6 +29,12 @@ export function getToken() {
 export function setAuth(token, userId, username) {
 	if (token) {
 		localStorage.setItem(STORAGE_KEYS.token, token);
+		const payload = decodeJwtPayload(token);
+		if (payload && typeof payload.role === "string") {
+			localStorage.setItem(STORAGE_KEYS.role, payload.role);
+		} else {
+			localStorage.removeItem(STORAGE_KEYS.role);
+		}
 	}
 	if (userId !== undefined && userId !== null) {
 		localStorage.setItem(STORAGE_KEYS.userId, String(userId));
@@ -24,18 +48,33 @@ export function clearAuth() {
 	localStorage.removeItem(STORAGE_KEYS.token);
 	localStorage.removeItem(STORAGE_KEYS.userId);
 	localStorage.removeItem(STORAGE_KEYS.username);
+	localStorage.removeItem(STORAGE_KEYS.role);
 }
 
 export function getCurrentUser() {
 	const token = getToken();
 	const username = localStorage.getItem(STORAGE_KEYS.username) || "";
 	const userId = Number(localStorage.getItem(STORAGE_KEYS.userId) || 0);
+	let role = localStorage.getItem(STORAGE_KEYS.role) || "";
+	if (!role && token) {
+		const payload = decodeJwtPayload(token);
+		if (payload && typeof payload.role === "string") {
+			role = payload.role;
+			localStorage.setItem(STORAGE_KEYS.role, role);
+		}
+	}
 	return {
 		token,
 		username,
 		userId: Number.isFinite(userId) ? userId : 0,
+		role,
 		isAuthed: Boolean(token),
 	};
+}
+
+export function isAdmin() {
+	const u = getCurrentUser();
+	return Boolean(u && u.isAuthed && u.role === "admin");
 }
 
 export function parseHashRoute() {

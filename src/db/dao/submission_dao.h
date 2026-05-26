@@ -17,6 +17,7 @@ class SubmissionDao {
 	std::int64_t Create(const Submission& s);
 	std::optional<Submission> GetById(std::int64_t id);
 	std::vector<Submission> ListByUser(std::int64_t user_id, int limit, int offset);
+	std::vector<Submission> ListAll(int limit, int offset);
 
 	bool UpdateResult(std::int64_t id,
 										const std::string& status,

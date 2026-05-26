@@ -1,1 +1,61 @@
-<!-- placeholder: admin dashboard.html -->
+<section class="stack">
+	<div class="page-head">
+		<h1>管理后台</h1>
+		<span class="muted">仅管理员可见</span>
+	</div>
+
+	<div class="card toolbar">
+		<a class="btn btn-ghost" href="#/admin/problems" data-link>题目管理</a>
+		<a class="btn btn-ghost" href="#/admin/languages" data-link>语言配置</a>
+		<button id="admin-refresh" type="button" class="btn btn-primary">刷新数据</button>
+		<div id="admin-submissions-loading" class="loading" style="display: none;">
+			<span class="spinner"></span>
+			<span>加载中...</span>
+		</div>
+	</div>
+
+	<div class="grid-two">
+		<div class="card">
+			<h2>全站提交（最近 20 条）</h2>
+			<table>
+				<thead>
+					<tr>
+						<th>ID</th>
+						<th>用户</th>
+						<th>题目</th>
+						<th>语言</th>
+						<th>状态</th>
+						<th>时间</th>
+					</tr>
+				</thead>
+				<tbody id="admin-submissions-tbody">
+					<tr>
+						<td colspan="6" class="muted">加载中...</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div class="card">
+			<h2>用户状态</h2>
+			<p class="muted">用于封禁/解封用户（示例：active / banned）。</p>
+			<form id="admin-user-status-form" class="stack">
+				<div>
+					<label for="admin-user-id">用户 ID</label>
+					<input id="admin-user-id" inputmode="numeric" placeholder="例如 1" />
+				</div>
+				<div>
+					<label for="admin-user-status">状态</label>
+					<select id="admin-user-status">
+						<option value="">请选择</option>
+						<option value="active">active</option>
+						<option value="banned">banned</option>
+					</select>
+				</div>
+				<div class="toolbar">
+					<button type="submit" class="btn btn-accent">更新</button>
+				</div>
+			</form>
+		</div>
+	</div>
+</section>

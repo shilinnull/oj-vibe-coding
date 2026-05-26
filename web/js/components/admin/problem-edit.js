@@ -36,6 +36,25 @@ function setCheckbox(id, checked) {
 	if (el) el.checked = Boolean(checked);
 }
 
+function setZipProgress(percent, text) {
+	const wrap = $("admin-zip-progress-wrap");
+	const bar = $("admin-zip-progress");
+	const label = $("admin-zip-progress-text");
+	if (!wrap || !bar || !label) return;
+	bar.value = Math.max(0, Math.min(100, Number(percent) || 0));
+	label.textContent = text || `${bar.value}%`;
+	wrap.style.display = "block";
+}
+
+function hideZipProgress() {
+	const wrap = $("admin-zip-progress-wrap");
+	const bar = $("admin-zip-progress");
+	const label = $("admin-zip-progress-text");
+	if (wrap) wrap.style.display = "none";
+	if (bar) bar.value = 0;
+	if (label) label.textContent = "0%";
+}
+
 function fillProblemList(items) {
 	const sel = $("admin-problem-select");
 	if (!sel) return;
@@ -72,6 +91,37 @@ function renderTestcases(items) {
 export function initAdminProblemEditPage() {
 	let aborted = false;
 	let currentProblemId = 0;
+	let selectedZipFile = null;
+
+	async function uploadZipFile(file) {
+		if (!currentProblemId) {
+			showToast("请先选择或创建题目", "error");
+			return;
+		}
+		if (!file) {
+			showToast("请选择 zip 文件", "error");
+			return;
+		}
+		try {
+			setZipProgress(0, "准备上传...");
+			setVisible($("admin-zip-loading"), true);
+			await adminUploadTestcasesZip(currentProblemId, file, (percent) => {
+				setZipProgress(percent, `上传中 ${percent}%`);
+			});
+			setZipProgress(100, "处理中...");
+			showToast("已导入用例（替换所有非样例）", "success");
+			selectedZipFile = null;
+			$("admin-zip-file").value = "";
+			const filenameEl = $("admin-zip-filename");
+			if (filenameEl) filenameEl.textContent = "未选择文件";
+			await loadProblem(currentProblemId);
+		} catch (e) {
+			showToast(e?.message || "上传失败", "error");
+		} finally {
+			setVisible($("admin-zip-loading"), false);
+			hideZipProgress();
+		}
+	}
 
 	async function loadProblemList(selectId = 0) {
 		try {
@@ -214,33 +264,30 @@ export function initAdminProblemEditPage() {
 		}
 	});
 
-	$("admin-upload-zip")?.addEventListener("click", async () => {
-		if (!currentProblemId) {
-			showToast("请先选择或创建题目", "error");
+	$("admin-upload-zip")?.addEventListener("click", () => {
+		const file = selectedZipFile || $("admin-zip-file")?.files?.[0];
+		if (file) {
+			void uploadZipFile(file);
 			return;
 		}
-		const file = $("admin-zip-file")?.files?.[0];
-		if (!file) {
-			showToast("请选择 zip 文件", "error");
-			return;
-		}
-		try {
-			setVisible($("admin-zip-loading"), true);
-			await adminUploadTestcasesZip(currentProblemId, file);
-			showToast("已导入用例（替换所有非样例）", "success");
-			$("admin-zip-file").value = "";
-			await loadProblem(currentProblemId);
-		} catch (e) {
-			showToast(e?.message || "上传失败", "error");
-		} finally {
-			setVisible($("admin-zip-loading"), false);
-		}
+		showToast("请先选择 zip 文件", "error");
 	});
 
-	$("admin-problem-preview")?.addEventListener("click", () => {
-		const title = escapeHtml(getFormValue("admin-title"));
-		const desc = escapeHtml(getFormValue("admin-description"));
-		$("admin-preview").innerHTML = `<h3>${title || "（无标题）"}</h3><pre class="md-block">${desc}</pre>`;
+	$("admin-zip-select")?.addEventListener("click", () => {
+		$("admin-zip-file")?.click();
+	});
+
+	$("admin-zip-file")?.addEventListener("change", async (ev) => {
+		const file = ev.target.files?.[0];
+		if (!file) {
+			selectedZipFile = null;
+			const filenameEl = $("admin-zip-filename");
+			if (filenameEl) filenameEl.textContent = "未选择文件";
+			return;
+		}
+		selectedZipFile = file;
+		const filenameEl = $("admin-zip-filename");
+		if (filenameEl) filenameEl.textContent = file.name || "已选择文件";
 	});
 
 	clearEditor();

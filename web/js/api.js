@@ -62,6 +62,17 @@ async function request(path, options = {}) {
 	return payload;
 }
 
+function parseResponseBody(bodyText) {
+	if (!bodyText) {
+		return null;
+	}
+	try {
+		return JSON.parse(bodyText);
+	} catch {
+		return bodyText;
+	}
+}
+
 export function login(username, password) {
 	return request("/auth/login", {
 		method: "POST",
@@ -177,12 +188,41 @@ export function adminAddTestcase(problemId, testcase) {
 	});
 }
 
-export function adminUploadTestcasesZip(problemId, file) {
+export function adminUploadTestcasesZip(problemId, file, onProgress) {
+	return adminUploadTestcasesZipWithProgress(problemId, file, onProgress);
+}
+
+export function adminUploadTestcasesZipWithProgress(problemId, file, onProgress) {
 	const fd = new FormData();
 	fd.append("file", file);
-	return request(`/admin/problems/${problemId}/testcases/upload`, {
-		method: "POST",
-		body: fd,
+	return new Promise((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		xhr.open("POST", `${API_BASE}/admin/problems/${problemId}/testcases/upload`);
+		const token = getToken();
+		if (token) {
+			xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+		}
+		xhr.upload.onprogress = (event) => {
+			if (!event.lengthComputable) {
+				return;
+			}
+			const percent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+			if (typeof onProgress === "function") {
+				onProgress(percent, event.loaded, event.total);
+			}
+		};
+		xhr.onload = () => {
+			const payload = parseResponseBody(xhr.responseText);
+			if (xhr.status >= 200 && xhr.status < 300) {
+				resolve(payload);
+				return;
+			}
+			reject(new ApiError(toErrorMessage(payload), xhr.status, payload));
+		};
+		xhr.onerror = () => {
+			reject(new ApiError("网络错误"));
+		};
+		xhr.send(fd);
 	});
 }
 

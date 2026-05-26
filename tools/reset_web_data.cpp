@@ -18,6 +18,8 @@ static constexpr const char* kResetDbUser = "shilin";
 static constexpr const char* kResetDbPassword = "123456";
 static constexpr const char* kResetDbHost = "localhost";
 static constexpr const char* kResetDbName = "oj";
+static constexpr const char* kAdminUsername = "admin";
+static constexpr const char* kAdminPassword = "admin123";
 
 static std::string ResolveConfigPath() {
     const char* candidates[] = {"./config/config.yaml", "../config/config.yaml", "../../config/config.yaml"};
@@ -53,6 +55,38 @@ static std::string CurrentTimestampSuffix() {
     return std::to_string(sec);
 }
 
+static long QueryUserIdByUsername(MYSQL* conn, const std::string& username) {
+    ExecOrDie(conn, "SELECT id FROM users WHERE username = '" + Escape(conn, username) + "' LIMIT 1");
+    MYSQL_RES* res = mysql_store_result(conn);
+    long user_id = 0;
+    if (res) {
+        MYSQL_ROW row = mysql_fetch_row(res);
+        if (row && row[0]) user_id = std::stol(row[0]);
+        mysql_free_result(res);
+    }
+    return user_id;
+}
+
+static long EnsureAdminAccount(MYSQL* conn) {
+    const std::string admin_hash = GeneratePasswordHash(kAdminPassword);
+    const long existing_id = QueryUserIdByUsername(conn, kAdminUsername);
+    if (existing_id > 0) {
+        std::string update_sql =
+            "UPDATE users SET username='" + Escape(conn, kAdminUsername) +
+            "', password='" + Escape(conn, admin_hash) +
+            "', email='', role='admin', status='active' WHERE id=" + std::to_string(existing_id);
+        ExecOrDie(conn, update_sql);
+        return existing_id;
+    }
+
+    std::string insert_sql =
+        "INSERT INTO users (username, password, email, role, status) VALUES ('" + Escape(conn, kAdminUsername) +
+        "', '" + Escape(conn, admin_hash) +
+        "', '', 'admin', 'active')";
+    ExecOrDie(conn, insert_sql);
+    return (long)mysql_insert_id(conn);
+}
+
 int main() {
     try {
         auto cfg = Config::LoadFromFile(ResolveConfigPath());
@@ -82,14 +116,13 @@ int main() {
 
         // Recreate basic users: admin and several student users with timestamp suffix.
         std::cout << "Inserting users...\n";
-        std::string admin_pass = GeneratePasswordHash("adminpass");
         std::string user_pass = GeneratePasswordHash("pass1234");
         std::string ts_suffix = CurrentTimestampSuffix();
         std::vector<std::string> seeded_users;
         const int kStudentUserCount = 6;
 
-        std::string admin_sql = "INSERT INTO users (username, password, email, role, status) VALUES ('admin', '" + Escape(conn, admin_pass) + "', 'admin@example.com', 'admin', 'active')";
-        ExecOrDie(conn, admin_sql);
+        long admin_id = EnsureAdminAccount(conn);
+        std::cout << "Admin account ready: username=" << kAdminUsername << ", id=" << admin_id << "\n";
         for (int i = 1; i <= kStudentUserCount; ++i) {
             std::string username = "ui_user_" + ts_suffix + "_" + std::to_string(i);
             std::string email = "ui_" + ts_suffix + "_" + std::to_string(i) + "@example.com";
@@ -104,15 +137,6 @@ int main() {
         ExecOrDie(conn, "INSERT INTO languages (name, extension, compile_cmd, run_cmd, enabled) VALUES ('C11', 'c', 'gcc -O2 -std=c11 {source} -o {output}', '{binary}', 1)");
 
         // Find a user id to use as created_by (admin)
-        ExecOrDie(conn, "SELECT id FROM users WHERE username = 'admin' LIMIT 1");
-        MYSQL_RES* res = mysql_store_result(conn);
-        long admin_id = 0;
-        if (res) {
-            MYSQL_ROW row = mysql_fetch_row(res);
-            if (row && row[0]) admin_id = std::stol(row[0]);
-            mysql_free_result(res);
-        }
-
         if (!admin_id) {
             std::cerr << "cannot find admin id" << std::endl;
             return 1;
@@ -147,18 +171,11 @@ int main() {
             std::cerr << "no seeded users found" << std::endl;
             return 1;
         }
-        ExecOrDie(conn, "SELECT id FROM users WHERE username = '" + Escape(conn, seeded_users.front()) + "' LIMIT 1");
-        res = mysql_store_result(conn);
-        long ui_id = 0;
-        if (res) {
-            MYSQL_ROW row = mysql_fetch_row(res);
-            if (row && row[0]) ui_id = std::stol(row[0]);
-            mysql_free_result(res);
-        }
+        long ui_id = QueryUserIdByUsername(conn, seeded_users.front());
 
         // find language id for C++17
         ExecOrDie(conn, "SELECT id FROM languages WHERE extension = 'cpp' LIMIT 1");
-        res = mysql_store_result(conn);
+        MYSQL_RES* res = mysql_store_result(conn);
         long cpp_lang = 0;
         if (res) {
             MYSQL_ROW row = mysql_fetch_row(res);

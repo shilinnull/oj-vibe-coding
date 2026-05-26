@@ -117,8 +117,9 @@
 					<span class="muted">会替换所有非样例用例</span>
 				</div>
 				<div>
-					<label for="admin-zip-file">选择 zip</label>
-					<input id="admin-zip-file" type="file" accept=".zip" />
+					<button id="admin-zip-select" type="button" class="btn btn-ghost">选择文件</button>
+					<span id="admin-zip-filename" class="muted" style="margin-left: 8px;">未选择文件</span>
+					<input id="admin-zip-file" type="file" accept=".zip" style="display: none;" />
 				</div>
 				<div class="toolbar">
 					<button id="admin-upload-zip" type="button" class="btn btn-accent">上传并导入</button>
@@ -126,6 +127,10 @@
 						<span class="spinner"></span>
 						<span>处理中...</span>
 					</div>
+				</div>
+				<div id="admin-zip-progress-wrap" style="display: none; width: 100%;">
+					<progress id="admin-zip-progress" max="100" value="0" style="width: 100%; height: 18px;"></progress>
+					<div id="admin-zip-progress-text" class="muted" style="margin-top: 4px;">0%</div>
 				</div>
 				<p class="muted">支持 zip 内任意目录层级的 <strong>*.in / *.out</strong> 成对文件（例如 1.in/1.out）。</p>
 			</div>
@@ -149,8 +154,4 @@
 		</table>
 	</div>
 
-	<div class="card">
-		<h2>预览</h2>
-		<div id="admin-preview" class="md-block muted">点击“预览”生成静态预览。</div>
-	</div>
 </section>

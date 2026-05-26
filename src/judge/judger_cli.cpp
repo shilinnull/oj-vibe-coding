@@ -1,10 +1,13 @@
 // judger_cli.cpp
 // 负责：读取 JSON 输入（stdin），编译源码，针对每个测试用例运行并进行严格输出比对，最终把结果以 JSON 输出到 stdout。
-// 注意：该实现为基础版本，不包含 nsjail/cgroups/seccomp 等沙箱机制，仅用于本地验证判题流程逻辑。
+// 注意：运行阶段通过 preload 沙箱 + rlimit 做进程、文件和资源约束，用于本地验收与安全测试。
 
 #include <nlohmann/json.hpp>
+#include <filesystem>
+#include <cstdlib>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <cerrno>
@@ -13,6 +16,7 @@
 #include <iostream>
 #include <sstream>
 #include <chrono>
+#include <signal.h>
 
 using json = nlohmann::json;
 
@@ -22,11 +26,162 @@ static std::string read_stdin_all() {
 	return ss.str();
 }
 
+// forward declare resolve function (defined later)
+static std::string resolve_sandbox_preload_path();
+
 static int run_shell_command(const std::string& cmd) {
 	// 简单调用系统命令并返回退出码
 	int ret = std::system(cmd.c_str());
 	if (ret == -1) return -1;
 	return WEXITSTATUS(ret);
+}
+
+struct RunResult {
+	int exit_code; // child exit code or -1
+	std::string status; // accepted/runtime_error/timeout/memory_limit
+	int time_ms;
+	int memory_kb;
+	std::string stderr_txt;
+};
+
+static RunResult run_program_with_limits(const std::string& binary,
+										 const std::string& in_path,
+										 const std::string& out_path,
+										 const std::string& err_path,
+										 int time_limit_ms,
+										 int memory_limit_kb) {
+	RunResult res;
+	res.exit_code = -1;
+	res.status = "runtime_error";
+	res.time_ms = 0;
+	res.memory_kb = 0;
+	res.stderr_txt = std::string();
+
+	pid_t pid = fork();
+	if (pid == -1) {
+		res.status = "system_error";
+		return res;
+	}
+
+	if (pid == 0) {
+		// child
+		// set resource limits
+		struct rlimit rl;
+		// CPU time in seconds (ceil)
+		rl.rlim_cur = rl.rlim_max = (time_limit_ms + 999) / 1000;
+		setrlimit(RLIMIT_CPU, &rl);
+
+		// Address space limit (bytes)
+		rlim_t as_limit = (rlim_t)memory_limit_kb * 1024ULL;
+		rl.rlim_cur = rl.rlim_max = as_limit;
+		setrlimit(RLIMIT_AS, &rl);
+
+		// Limit number of processes
+		rl.rlim_cur = rl.rlim_max = 16;
+		setrlimit(RLIMIT_NPROC, &rl);
+
+		const std::string preload = resolve_sandbox_preload_path();
+		if (!preload.empty()) {
+			setenv("LD_PRELOAD", preload.c_str(), 1);
+		}
+
+		// Redirect stdin/stdout/stderr
+		int in_fd = open(in_path.c_str(), O_RDONLY);
+		int out_fd = open(out_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+		int err_fd = open(err_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+		if (in_fd >= 0) dup2(in_fd, STDIN_FILENO);
+		if (out_fd >= 0) dup2(out_fd, STDOUT_FILENO);
+		if (err_fd >= 0) dup2(err_fd, STDERR_FILENO);
+
+		// drop privileges? (not implemented here)
+
+		// exec binary
+		execl(binary.c_str(), binary.c_str(), (char*)NULL);
+		// if exec fails
+		_exit(127);
+	}
+
+	// parent
+	auto t0 = std::chrono::steady_clock::now();
+	int status = 0;
+	struct rusage usage;
+	bool killed_for_timeout = false;
+	while (true) {
+		pid_t w = wait4(pid, &status, WNOHANG, &usage);
+		auto t1 = std::chrono::steady_clock::now();
+		int elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+		if (w == 0) {
+			// still running
+			if (elapsed_ms > time_limit_ms + 200) {
+				// kill it
+				kill(pid, SIGKILL);
+				killed_for_timeout = true;
+				// wait for it to die
+				wait4(pid, &status, 0, &usage);
+				res.time_ms = elapsed_ms;
+				break;
+			}
+			// sleep a bit
+			usleep(1000 * 5);
+			continue;
+		} else if (w == pid) {
+			res.time_ms = elapsed_ms;
+			break;
+		} else {
+			// unexpected
+			res.time_ms = elapsed_ms;
+			break;
+		}
+	}
+
+	// read stderr
+	res.stderr_txt = "";
+	std::string se = [] (const std::string& p)->std::string {
+		std::ifstream ifs(p);
+		if (!ifs) return std::string();
+		std::ostringstream ss;
+		ss << ifs.rdbuf();
+		return ss.str();
+	}(err_path);
+	res.stderr_txt = se;
+
+	// ru_maxrss is in kilobytes on Linux
+	res.memory_kb = static_cast<int>(usage.ru_maxrss);
+
+	if (killed_for_timeout) {
+		res.status = "time_limit_exceeded";
+		res.exit_code = -1;
+		return res;
+	}
+
+	if (res.memory_kb > memory_limit_kb) {
+		res.status = "memory_limit_exceeded";
+		res.exit_code = -1;
+		return res;
+	}
+
+	if (WIFSIGNALED(status)) {
+		int sig = WTERMSIG(status);
+		if (sig == SIGKILL || sig == SIGXCPU) {
+			res.status = "time_limit_exceeded";
+		} else {
+			res.status = "runtime_error";
+		}
+		res.exit_code = -1;
+		return res;
+	}
+
+	if (WIFEXITED(status)) {
+		int ec = WEXITSTATUS(status);
+		res.exit_code = ec;
+		if (ec != 0) {
+			res.status = "runtime_error";
+		} else {
+			res.status = "accepted";
+		}
+	}
+
+	return res;
 }
 
 static std::string read_file(const std::string& path) {
@@ -40,6 +195,25 @@ static std::string read_file(const std::string& path) {
 static void write_file(const std::string& path, const std::string& content) {
 	std::ofstream ofs(path);
 	ofs << content;
+}
+
+static std::string resolve_sandbox_preload_path() {
+	const std::filesystem::path cwd = std::filesystem::current_path();
+	const std::filesystem::path candidates[] = {
+		cwd / "run" / "libjudge_sandbox_preload.so",
+		cwd / "run" / "libsandbox_preload.so",
+		cwd / "build" / "run" / "libjudge_sandbox_preload.so",
+		cwd / "build" / "run" / "libsandbox_preload.so",
+		std::filesystem::path("./run/libjudge_sandbox_preload.so"),
+		std::filesystem::path("./run/libsandbox_preload.so"),
+	};
+
+	for (const auto& candidate : candidates) {
+		if (std::filesystem::exists(candidate)) {
+			return std::filesystem::absolute(candidate).string();
+		}
+	}
+	return std::string();
 }
 
 int main() {
@@ -134,38 +308,38 @@ int main() {
 
 		write_file(in_path, input_data);
 
-		// 构造运行命令
-		std::string run_command = run_cmd;
-		run_command = replace_all(run_command, "{binary}", binary_path);
-		// 将 stdin 重定向，stdout 重定向到文件，stderr 重定向到 err 文件
-		run_command += " < \"" + in_path + "\" > \"" + out_path + "\" 2> \"" + run_err + "\"";
-
-		// 计时
-		auto t0 = std::chrono::steady_clock::now();
-		int run_ret = run_shell_command(run_command);
-		auto t1 = std::chrono::steady_clock::now();
-		int elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-		total_time_ms += elapsed_ms;
+		// 使用受限运行器执行二进制
+		RunResult rr = run_program_with_limits(binary_path, in_path, out_path, run_err, time_limit_ms, memory_limit_kb);
+		total_time_ms += rr.time_ms;
 
 		std::string actual = read_file(out_path);
-		std::string stderr_txt = read_file(run_err);
 
 		json r;
 		r["test_case_id"] = tc_id;
-		r["time_ms"] = elapsed_ms;
-		r["memory_kb"] = 0; // 未测量
+		r["time_ms"] = rr.time_ms;
+		r["memory_kb"] = rr.memory_kb;
 		r["actual_output"] = actual;
 		r["expected_output"] = expected;
 
-		if (run_ret != 0) {
-			r["status"] = "runtime_error";
-			r["stderr"] = stderr_txt;
-			out["status"] = "runtime_error";
-		} else if (actual == expected) {
+		if (rr.status == "accepted") {
 			r["status"] = "accepted";
 			passed++;
+		} else if (rr.status == "time_limit_exceeded") {
+			r["status"] = "time_limit_exceeded";
+			out["status"] = "time_limit_exceeded";
+			r["stderr"] = rr.stderr_txt;
+		} else if (rr.status == "memory_limit_exceeded") {
+			r["status"] = "memory_limit_exceeded";
+			out["status"] = "memory_limit_exceeded";
+			r["stderr"] = rr.stderr_txt;
+		} else if (rr.status == "runtime_error") {
+			r["status"] = "runtime_error";
+			out["status"] = "runtime_error";
+			r["stderr"] = rr.stderr_txt;
 		} else {
-			r["status"] = "wrong_answer";
+			r["status"] = rr.status;
+			out["status"] = rr.status;
+			r["stderr"] = rr.stderr_txt;
 		}
 
 		out["results"].push_back(r);

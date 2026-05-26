@@ -91,7 +91,7 @@ void ExecSql(MYSQL* conn, const std::string& sql) {
 
 void BootstrapSchema() {
     RawMysqlConnection server(nullptr);
-    ExecSql(server.get(), "CREATE DATABASE IF NOT EXISTS shilin DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    ExecSql(server.get(), "CREATE DATABASE IF NOT EXISTS oj DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     if (mysql_select_db(server.get(), kMysqlDatabase) != 0) {
         throw std::runtime_error(std::string("mysql_select_db failed: ") + mysql_error(server.get()));
     }

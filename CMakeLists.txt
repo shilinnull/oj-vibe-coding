@@ -75,6 +75,18 @@ target_link_libraries(judger_cli PRIVATE oj_core nlohmann_json::nlohmann_json)
 # 将可执行放到 run/ 目录，便于 JudgeManager 使用相对路径 ./run/judger_cli
 set_target_properties(judger_cli PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/run)
 
+add_library(judge_sandbox_preload SHARED src/judge/sandbox_preload.cpp)
+target_link_libraries(judge_sandbox_preload PRIVATE dl)
+set_target_properties(judge_sandbox_preload PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/run)
+
+add_executable(register_admin tools/register_admin.cpp)
+target_link_libraries(register_admin PRIVATE oj_core)
+set_target_properties(register_admin PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+
+add_executable(reset_web_data tools/reset_web_data.cpp)
+target_link_libraries(reset_web_data PRIVATE oj_core)
+set_target_properties(reset_web_data PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+
 if(OJ_BUILD_TESTS)
 	enable_testing()
 	find_package(GTest REQUIRED)

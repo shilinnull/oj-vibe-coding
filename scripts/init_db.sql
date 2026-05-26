@@ -82,6 +82,10 @@ CREATE INDEX idx_submissions_problem_id ON submissions(problem_id);
 CREATE INDEX idx_test_cases_problem_id ON test_cases(problem_id);
 CREATE INDEX idx_problems_status ON problems(status);
 
+-- Additional indexes for common queries
+CREATE INDEX idx_submissions_user_created_at ON submissions(user_id, created_at);
+CREATE INDEX idx_submissions_status_created_at ON submissions(status, created_at);
+
 -- Seed data
 -- NOTE: 密码应存储为 bcrypt/argon2 hash。P0 阶段先放占位值，后续在 P2 crypto 完成后再替换。
 INSERT IGNORE INTO users(username, password, email, role, status)

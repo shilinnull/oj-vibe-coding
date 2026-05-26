@@ -10,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include "utils/json_helper.h"
+#include "utils/logger.h"
 
 namespace oj {
 namespace handler {
@@ -76,8 +77,11 @@ inline void GuardJsonHandler(httplib::Response& res, Func&& fn) {
 	try {
 		fn();
 	} catch (const std::exception& e) {
+		// log exception
+		oj::Logger::Instance().Log(oj::LogLevel::Error, __FILE__, __LINE__, std::string("Unhandled exception in handler: ") + e.what());
 		SendJsonError(res, 500, "internal", e.what());
 	} catch (...) {
+		oj::Logger::Instance().Log(oj::LogLevel::Error, __FILE__, __LINE__, "Unhandled unknown exception in handler");
 		SendJsonError(res, 500, "internal", "unknown exception");
 	}
 }

@@ -13,6 +13,7 @@
 #include "db/dao/submission_dao.h"
 #include "db/dao/test_case_dao.h"
 #include "handler/handler_base.h"
+#include "judge/judge_manager.h"
 
 namespace oj {
 namespace handler {
@@ -71,9 +72,32 @@ json SubmissionToResponse(const Submission& submission) {
 	return body;
 }
 
+json BuildJudgePayload(const Submission& submission,
+						 const Problem& problem,
+						 const Language& language,
+						 const std::vector<TestCase>& test_cases) {
+	json payload;
+	payload["language"] = language.extension.empty() ? std::string("cpp") : language.extension;
+	payload["source_code"] = submission.source_code;
+	payload["time_limit_ms"] = problem.time_limit_ms;
+	payload["memory_limit_kb"] = problem.memory_limit_kb;
+	payload["work_dir"] = std::string("./run/judge_") + std::to_string(submission.id);
+	payload["compile_cmd"] = language.compile_cmd;
+	payload["run_cmd"] = language.run_cmd;
+	payload["test_cases"] = json::array();
+	for (const auto& tc : test_cases) {
+		payload["test_cases"].push_back({
+				{"id", tc.id},
+				{"input", tc.input},
+				{"expected_output", tc.output},
+		});
+	}
+	return payload;
+}
+
 }  // namespace
 
-void RegisterSubmissionRoutes(Router& router, MySqlPool& pool) {
+void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& judge_manager) {
 	router.Get(R"(/api/languages)", [&pool](const httplib::Request& /*req*/, httplib::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			LanguageDao dao(pool);
@@ -81,7 +105,7 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool) {
 		});
 	});
 
-	router.Post(R"(/api/submissions)", [&pool](const httplib::Request& req, httplib::Response& res) {
+	router.Post(R"(/api/submissions)", [&pool, &judge_manager](const httplib::Request& req, httplib::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			auto body_json = ParseJsonBody(req, res);
 			if (!body_json.has_value()) {
@@ -104,9 +128,10 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool) {
 				return;
 			}
 
-			ProblemDao problem_dao(pool);
-			if (!problem_dao.GetById(*problem_id).has_value()) {
-				SendJsonError(res, 404, "problem not found");
+				ProblemDao problem_dao(pool);
+				auto problem = problem_dao.GetById(*problem_id);
+				if (!problem.has_value()) {
+					SendJsonError(res, 404, "problem not found");
 				return;
 			}
 
@@ -122,9 +147,10 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool) {
 			}
 
 			TestCaseDao test_case_dao(pool);
-			const auto samples = test_case_dao.ListByProblem(*problem_id, true);
+				const bool sample_mode = mode == "run";
+				const auto test_cases = test_case_dao.ListByProblem(*problem_id, sample_mode);
 
-			Submission submission;
+				Submission submission;
 			submission.user_id = *user_id;
 			submission.problem_id = *problem_id;
 			submission.language_id = static_cast<int>(*language_id);
@@ -133,14 +159,27 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool) {
 			submission.status = "pending";
 			submission.result_json = json{{"status", "PENDING"},
 													{"mode", mode},
-													{"judge_scope", mode == "run" ? "sample" : "all"},
-													{"sample_case_count", samples.size()}}
+												{"judge_scope", sample_mode ? "sample" : "all"},
+												{"sample_case_count", test_cases.size()}}
 							.dump();
-			const std::int64_t submission_id = SubmissionDao(pool).Create(submission);
+				const std::int64_t submission_id = SubmissionDao(pool).Create(submission);
+				submission.id = submission_id;
+
+				const json payload = BuildJudgePayload(submission, *problem, *language, test_cases);
+				if (!judge_manager.submit(JudgeJob{submission_id, payload})) {
+					SubmissionDao(pool).UpdateResult(
+							submission_id,
+							"system_error",
+							json{{"status", "SYSTEM_ERROR"}, {"error", "judge queue unavailable"}}.dump(),
+							0,
+							0);
+					SendJsonError(res, 503, "judge queue unavailable");
+					return;
+				}
 
 			json response = SubmissionToResponse(submission);
 			response["id"] = submission_id;
-			response["sample_case_count"] = samples.size();
+				response["sample_case_count"] = test_cases.size();
 			SendJson(res, 201, response);
 		});
 	});

@@ -3,15 +3,19 @@
 // 该实现为基础版本，错误处理和日志可按需增强。
 
 #include "judge_manager.h"
+#include "db/dao/submission_dao.h"
+#include "utils/json_helper.h"
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <iostream>
 #include <sstream>
+#include <cstring>
+#include <filesystem>
 #include <vector>
 
-JudgeManager::JudgeManager(int max_concurrency)
-	: max_concurrency_(max_concurrency), running_(true) {
+JudgeManager::JudgeManager(oj::MySqlPool& pool, int max_concurrency)
+	: pool_(&pool), max_concurrency_(max_concurrency), running_(true) {
 	for (int i = 0; i < max_concurrency_; ++i) {
 		workers_.emplace_back(&JudgeManager::worker_thread, this);
 	}
@@ -50,6 +54,21 @@ static std::string read_fd_all(int fd) {
 	return ss.str();
 }
 
+static std::string resolve_judger_cli_path() {
+	for (const char* candidate : {
+				"./run/judger_cli",
+				"../run/judger_cli",
+				"../../run/judger_cli",
+				"run/judger_cli",
+		}) {
+		std::error_code ec;
+		if (std::filesystem::exists(candidate, ec)) {
+			return std::filesystem::path(candidate).lexically_normal().string();
+		}
+	}
+	return "./run/judger_cli";
+}
+
 void JudgeManager::worker_thread() {
 	while (true) {
 		JudgeJob job;
@@ -84,8 +103,8 @@ void JudgeManager::worker_thread() {
 			close(inpipe[0]); close(inpipe[1]); close(outpipe[0]); close(outpipe[1]);
 
 			// exec
-			const char* exe = "./run/judger_cli"; // 运行目录可调整为构建产物位置
-			execlp(exe, exe, (char*)NULL);
+			const std::string exe = resolve_judger_cli_path();
+			execlp(exe.c_str(), exe.c_str(), (char*)NULL);
 			// 若 exec 失败，退出
 			std::cerr << "JudgeManager: exec judger_cli 失败: " << strerror(errno) << "\n";
 			_exit(127);
@@ -107,7 +126,38 @@ void JudgeManager::worker_thread() {
 		int status = 0;
 		waitpid(pid, &status, 0);
 
-		// 简单打印结果，实际应写回数据库或通过回调上报
+		std::string final_status = "system_error";
+		std::string stored_result;
+		int time_ms = 0;
+		int memory_kb = 0;
+		if (auto parsed = oj::TryParseJson(out, nullptr); parsed.has_value()) {
+			stored_result = out;
+			const auto& result = *parsed;
+			if (result.contains("status") && result["status"].is_string()) {
+				final_status = result["status"].get<std::string>();
+			}
+			if (result.contains("summary") && result["summary"].is_object()) {
+				time_ms = result["summary"].value("total_time_ms", 0);
+				memory_kb = result["summary"].value("peak_memory_kb", 0);
+			}
+		} else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+			final_status = "system_error";
+			stored_result = json{{"status", "SYSTEM_ERROR"}, {"error", out.empty() ? "judge failed" : out}}.dump();
+		} else {
+			stored_result = json{{"status", "SYSTEM_ERROR"}, {"error", out.empty() ? "empty judge output" : out}}.dump();
+		}
+		if (stored_result.empty()) {
+			stored_result = json{{"status", "SYSTEM_ERROR"}, {"error", out.empty() ? "empty judge output" : out}}.dump();
+		}
+
+		try {
+			oj::SubmissionDao dao(*pool_);
+			dao.UpdateResult(job.submission_id, final_status, stored_result, time_ms, memory_kb);
+		} catch (const std::exception& e) {
+			std::cerr << "JudgeManager: 回写 submission_id=" << job.submission_id
+					  << " 失败: " << e.what() << "\n";
+		}
+
 		std::cerr << "JudgeManager: submission_id=" << job.submission_id << " finished, result=" << out << "\n";
 	}
 }

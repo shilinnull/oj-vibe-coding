@@ -7,6 +7,7 @@
 #include "router.h"
 #include "utils/config.h"
 #include "db/mysql_pool.h"
+#include "judge/judge_manager.h"
 
 namespace oj {
 
@@ -26,6 +27,7 @@ class HttpServer {
 	httplib::Server server_{};
 	Router router_{};
 	std::unique_ptr<MySqlPool> pool_{};
+	std::unique_ptr<JudgeManager> judge_manager_{};
 };
 
 }  // namespace oj

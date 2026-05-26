@@ -130,84 +130,45 @@ judger CLI 输出 JSON 结果 → JudgeManager 解析
 ```
 oj-vibe-coding/
 ├── CMakeLists.txt
+├── DEPLOY.md
+├── README.md
+├── build/                      # CMake 构建产物（可包含 oj_server, oj_tests 等）
 ├── config/
 │   └── config.yaml              # MySQL连接、端口、JWT密钥等（YAML）
-├── web/                         # 前端静态文件（按 P4 — 前端 页面/组件划分）
-│   ├── index.html               # SPA 入口（加载 app.js 并挂载页面）
-│   ├── pages/                   # 独立 HTML 页面模板（或 SPA 路由对应的模板）
-│   │   ├── login.html
-│   │   ├── register.html
-│   │   ├── problem-list.html
-│   │   ├── problem-detail.html
-│   │   ├── submission-result.html
-│   │   ├── history.html
-│   │   └── admin/               # 管理后台页面
-│   │       ├── dashboard.html
-│   │       ├── problem-edit.html
-│   │       └── language-config.html
-│   ├── css/
-│   │   └── style.css
-│   ├── js/
-│   │   ├── app.js               # SPA 路由与页面挂载
-│   │   ├── api.js               # API 请求封装（统一错误/鉴权处理）
-│   │   ├── components/          # 可复用 JS 组件（按功能拆分）
-│   │   │   ├── editor.js        # Monaco 集成封装（编辑器配置/主题/语言）
-│   │   │   ├── login.js
-│   │   │   ├── problem-list.js
-│   │   │   ├── problem-detail.js
-│   │   │   ├── submission-result.js
-│   │   │   └── history.js
-│   │   └── utils.js             # 辅助工具（格式化、debounce、storage）
-│   └── lib/
-│       └── monaco/              # Monaco Editor（可放本地或 CDN 引用）
+├── docs/
+│   └── SPEC.md
+├── run/                        # 运行时 / 判题工作目录（编译产物、临时文件、judge workdirs）
+│   ├── user_bin
+│   ├── user_code.cpp
+│   └── judge_<id>/              # judge_* 子目录（如 judge_14, judge_16...）
+├── Testing/                    # 测试运行记录 / 历史（CI 本地记录）
+├── scripts/
+│   └── init_db.sql
 ├── src/
 │   ├── main.cpp                 # 入口
 │   ├── server.cpp/h             # httplib Server 封装
 │   ├── router.cpp/h             # URL 路由注册
 │   ├── middleware/
-│   │   └── auth.cpp/h           # Session/JWT 鉴权中间件
 │   ├── handler/                 # Handler 抽象层（为 Muduo 迁移准备）
-│   │   ├── handler_base.h       # Handler 基类/接口
-│   │   ├── auth_handler.cpp/h
-│   │   ├── problem_handler.cpp/h
-│   │   ├── submission_handler.cpp/h
-│   │   └── admin_handler.cpp/h
-│   ├── judge/
-│   │   ├── judge_manager.cpp/h  # 判题调度器
-│   │   └── judger_cli.cpp       # 判题 CLI 独立程序
+│   ├── judge/                   # 判题器相关代码（JudgeManager / judger CLI）
 │   ├── model/
-│   │   ├── user.cpp/h
-│   │   ├── problem.cpp/h
-│   │   ├── submission.cpp/h
-│   │   ├── test_case.cpp/h
-│   │   └── language.cpp/h
 │   ├── db/
-│   │   ├── mysql_pool.cpp/h     # MySQL 连接池
-│   │   └── dao/                 # 数据访问对象
-│   │       ├── user_dao.cpp/h
-│   │       ├── problem_dao.cpp/h
-│   │       ├── submission_dao.cpp/h
-│   │       ├── test_case_dao.cpp/h
-│   │       └── language_dao.cpp/h
 │   └── utils/
-│       ├── config.cpp/h         # 配置封装（配置文件读取、环境变量扩展等）
-│       ├── logger.cpp/h         # 日志封装（统一输出格式、日志级别、文件/控制台输出）
-│       ├── crypto.cpp/h         # 密码哈希 (bcrypt/argon2)
-│       └── json_helper.cpp/h    # JSON 序列化
-├── run/                         # 运行期目录（默认用于 judger work_dir：编译产物/临时文件）
-├── testdata/                    # 测试用例文件存储
-│   └── {problem_id}/
-│       ├── 1.in
-│       ├── 1.out
-│       ├── 2.in
-│       └── 2.out
-├── scripts/
-│   └── init_db.sql
-├── tests/                       # 单元测试（googletest）
-│   ├── utils/
-│   ├── db/
-│   ├── handler/
-│   └── judge/
+├── testcase/                   # 单题测试用例（样例 / 本地调试用例）
+│   ├── 1.in
+│   └── ...
+├── tests/                      # 单元测试（googletest、python 接口测试等）
+│   ├── main.cpp
+│   ├── security_acceptance_test.cpp
+│   └── test_api.py
+├── tools/
+│   ├── register_admin
+│   └── reset_web_data
+├── web/                        # 前端静态文件（SPA、Monaco 编辑器等）
+│   ├── index.html
+│   ├── css/
+│   ├── js/
+│   └── pages/
 └── SPEC.md
 ```
 

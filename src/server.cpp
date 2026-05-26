@@ -151,9 +151,10 @@ HttpServer::HttpServer(const oj::AppConfig& cfg) {
 	// 服务启动时先初始化数据库连接池，再把认证相关路由挂进去。
 	try {
 		pool_ = std::make_unique<MySqlPool>(cfg.mysql);
+		judge_manager_ = std::make_unique<JudgeManager>(*pool_, cfg.judge.max_concurrency);
 		handler::RegisterAuthRoutes(router_, cfg.auth.jwt.secret, *pool_);
 		handler::RegisterProblemRoutes(router_, *pool_);
-		handler::RegisterSubmissionRoutes(router_, *pool_);
+		handler::RegisterSubmissionRoutes(router_, *pool_, *judge_manager_);
 		handler::RegisterAdminRoutes(router_, cfg.auth.jwt.secret, *pool_);
 	} catch (const std::exception& e) {
 		OJ_LOG_ERROR(std::string("failed init db or auth routes: ") + e.what());

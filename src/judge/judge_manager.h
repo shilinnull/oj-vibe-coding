@@ -11,6 +11,11 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <vector>
+
+namespace oj {
+class MySqlPool;
+}
 
 using json = nlohmann::json;
 
@@ -21,7 +26,7 @@ struct JudgeJob {
 
 class JudgeManager {
 public:
-	explicit JudgeManager(int max_concurrency = 4);
+	explicit JudgeManager(oj::MySqlPool& pool, int max_concurrency = 4);
 	~JudgeManager();
 
 	// 提交任务到队列，返回任务是否成功入队
@@ -33,6 +38,7 @@ public:
 private:
 	void worker_thread();
 
+	oj::MySqlPool* pool_;
 	int max_concurrency_;
 	std::vector<std::thread> workers_;
 	std::queue<JudgeJob> queue_;

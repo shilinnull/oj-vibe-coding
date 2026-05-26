@@ -7,3 +7,6 @@ build/
 
 *.in
 *.out
+
+.playwright-cli/
+.claude/

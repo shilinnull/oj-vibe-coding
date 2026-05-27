@@ -1,6 +1,6 @@
 # OJ Vibe Coding
 
-轻量级在线判题系统（Online Judge），用于教学与小型竞赛场景。后端基于 C++11 自主开发的高性能网络库提供 HTTP 服务，判题采用独立子进程 + nsjail 沙箱隔离架构，适合教学与本地部署测试。
+轻量级在线判题系统（Online Judge），用于教学与小型竞赛场景。后端基于 C++11 自主开发的高性能事件驱动网络服务器框架提供 HTTP 服务，采用非阻塞 IO + epoll 实现主从 Reactor 多线程模型，支持高并发网络连接处理。判题采用独立子进程 + nsjail 沙箱隔离架构，适合教学与本地部署测试。
 
 ## 功能
 
@@ -15,24 +15,30 @@
 
 ```
 ├── src/
-│   ├── net/           高性能网络库（自研 muduo 风格）
-│   │   ├── muduo.hpp  Buffer / Socket / Channel / Poller / EventLoop / TimerWheel / TcpServer
-│   │   ├── http.hpp   HttpRequest / Response / HttpServer / 路由分发
-│   │   ├── router.h   业务路由注册
-│   │   └── router.cpp
-│   ├── server/        HTTP 服务启动入口
-│   ├── handler/       业务逻辑（auth / problem / submission / admin）
-│   ├── judge/         判题调度（JudgeManager / judger_cli / sandbox_preload）
-│   ├── db/            数据库连接池 + DAO
-│   ├── model/         数据模型（User / Problem / Submission / TestCase / Language）
-│   ├── middleware/    中间件（JWT 鉴权）
-│   └── utils/         工具类（Config / Logger / Crypto / JsonHelper）
-├── web/               前端静态页面（HTML / CSS / JS + 代码编辑器）
-├── config/            配置文件（config.yaml）
-├── run/               运行时目录（判题工作区、judger 二进制）
-├── scripts/           SQL 脚本
-├── tests/             GTest 单元测试
-└── tools/             辅助工具（register_admin、reset_web_data）
+│   ├── net/                高性能网络库（自研 muduo 风格）
+│   ├── server/             HTTP 服务启动入口
+│   ├── handler/            业务逻辑
+│   │   ├── auth_handler        注册 / 登录
+│   │   ├── problem_handler     题目管理
+│   │   ├── submission_handler  提交与判题
+│   │   └── admin_handler       管理员接口
+│   ├── judge/              判题调度
+│   │   ├── judge_manager       判题任务队列与并发控制
+│   │   ├── judger_cli          判题子进程
+│   │   └── sandbox_preload     沙箱 preload 库
+│   ├── db/                  MySQL 连接池 + DAO
+│   ├── model/               数据模型（User / Problem / Submission / TestCase / Language）
+│   ├── middleware/          JWT 鉴权中间件
+│   └── utils/              工具类（Config / Logger / Crypto / JsonHelper）
+├── web/                    前端静态页面
+│   ├── pages/              页面模板
+│   ├── js/                 JavaScript 逻辑
+│   └── css/                样式
+├── config/                 配置文件（config.yaml）
+├── run/                    运行时目录（判题工作区、judger 二进制）
+├── scripts/                数据库初始化脚本
+├── tests/                  GTest 单元测试
+└── tools/                  辅助工具（register_admin、reset_web_data）
 ```
 
 ## 快速开始
@@ -58,10 +64,7 @@ make -j$(nproc)
 ### 初始化数据库
 
 ```bash
-# 创建数据库
 mysql -u root -p -e "CREATE DATABASE oj_vibe DEFAULT CHARACTER SET utf8mb4;"
-
-# 导入表结构
 mysql -u root -p oj_vibe < ../scripts/init_db.sql
 ```
 
@@ -103,7 +106,7 @@ auth:
 ### 创建管理员
 
 ```bash
-./build/register_admin --username admin --password your_password
+./build/tools/register_admin --username admin --password your_password
 ```
 
 ## 开发
@@ -125,7 +128,12 @@ ctest --output-on-failure
 
 ## 部署
 
-生产环境部署详见 [DEPLOY.md](DEPLOY.md)，包含 systemd 示例、nsjail 沙箱配置、日志与排错指南。
+生产环境部署详见 [DEPLOY.md](DEPLOY.md)，包含：
+
+- systemd 服务单元示例
+- nsjail 沙箱配置与注意事项
+- 日志与排错指南
+- 备份与升级流程
 
 ## 技术栈
 
@@ -134,12 +142,14 @@ ctest --output-on-failure
 | 编程语言 | C++11 |
 | 网络框架 | 自研高性能网络库（主从 Reactor + epoll LT + eventfd） |
 | 构建工具 | CMake + Makefile |
+| 调试工具 | g++、gdb |
 | 数据库 | MySQL / MariaDB |
 | 持久化 | 自研连接池 + 参数化 SQL |
 | 鉴权 | JWT（自研签名） |
 | 判题沙箱 | nsjail + 独立子进程 |
-| 前端 | HTML / CSS / JavaScript + 编辑器 |
+| 前端 | HTML / CSS / JavaScript + 代码编辑器 |
 | 测试 | GTest |
+| 版本控制 | git |
 
 ## 许可证
 

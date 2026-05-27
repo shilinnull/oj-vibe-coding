@@ -129,47 +129,135 @@ judger CLI 输出 JSON 结果 → JudgeManager 解析
 
 ```
 oj-vibe-coding/
-├── CMakeLists.txt
+├── CMakeLists.txt               # 根构建文件
 ├── DEPLOY.md
+├── Question.md
 ├── README.md
-├── build/                      # CMake 构建产物（可包含 oj_server, oj_tests 等）
+├── build/                       # CMake 构建产物
 ├── config/
 │   └── config.yaml              # MySQL连接、端口、JWT密钥等（YAML）
 ├── docs/
-│   └── SPEC.md
-├── run/                        # 运行时 / 判题工作目录（编译产物、临时文件、judge workdirs）
-│   ├── user_bin
-│   ├── user_code.cpp
-│   └── judge_<id>/              # judge_* 子目录（如 judge_14, judge_16...）
-├── Testing/                    # 测试运行记录 / 历史（CI 本地记录）
+│   ├── SPEC.md
+│   ├── acceptance_report.md
+│   └── web_testcase.md
+├── run/                         # 运行时 / 判题工作目录
+│   ├── user_bin                 # 编译后的用户程序
+│   ├── user_code.cpp            # 用户提交的源代码
+│   ├── judger_cli               # 判题器可执行文件
+│   ├── libjudge_sandbox_preload.so # 沙箱 preload 库
+│   ├── compile_err.txt
+│   ├── judge_<id>/              # 单次提交的判题沙箱目录
+│   └── security_*/              # 安全验收测试沙箱
 ├── scripts/
 │   └── init_db.sql
 ├── src/
 │   ├── main.cpp                 # 入口
-│   ├── server.cpp/h             # httplib Server 封装
-│   ├── router.cpp/h             # URL 路由注册
+│   ├── server/
+│   │   ├── server.cpp/h         # HTTP Server 封装（cpp-httplib）
+│   ├── net/
+│   │   ├── router.cpp/h         # URL 路由注册
+│   │   ├── http.hpp             # HTTP 工具函数
+│   │   └── muduo.hpp            # Muduo 网络库抽象层
 │   ├── middleware/
-│   ├── handler/                 # Handler 抽象层（为 Muduo 迁移准备）
-│   ├── judge/                   # 判题器相关代码（JudgeManager / judger CLI）
+│   │   └── auth.cpp/h           # 鉴权中间件
+│   ├── handler/                 # Handler 抽象层
+│   │   ├── handler_base.h
+│   │   ├── auth_handler.cpp/h
+│   │   ├── problem_handler.cpp/h
+│   │   ├── submission_handler.cpp/h
+│   │   └── admin_handler.cpp/h
+│   ├── judge/                   # 判题器
+│   │   ├── judge_manager.cpp/h  # 判题调度器（队列 + 并发控制 + fork/exec）
+│   │   ├── judger_cli.cpp       # 判题 CLI 入口
+│   │   └── sandbox_preload.cpp  # 沙箱 LD_PRELOAD 库
 │   ├── model/
+│   │   ├── user.cpp/h
+│   │   ├── problem.cpp/h
+│   │   ├── submission.cpp/h
+│   │   ├── test_case.cpp/h
+│   │   └── language.cpp/h
 │   ├── db/
+│   │   ├── mysql_pool.cpp/h     # MySQL 连接池
+│   │   └── dao/
+│   │       ├── user_dao.cpp/h
+│   │       ├── problem_dao.cpp/h
+│   │       ├── submission_dao.cpp/h
+│   │       ├── test_case_dao.cpp/h
+│   │       └── language_dao.cpp/h
 │   └── utils/
-├── testcase/                   # 单题测试用例（样例 / 本地调试用例）
-│   ├── 1.in
-│   └── ...
-├── tests/                      # 单元测试（googletest、python 接口测试等）
+│       ├── config.cpp/h         # YAML 配置解析
+│       ├── crypto.cpp/h         # 密码哈希（bcrypt/argon2）
+│       ├── json_helper.cpp/h    # JSON 序列化
+│       └── logger.cpp/h         # 日志
+├── testcase/                    # 单题测试用例（.in / .out 配对）
+│   └── testcases_upload.zip
+├── tests/                       # 单元测试（googletest + pytest）
 │   ├── main.cpp
 │   ├── security_acceptance_test.cpp
-│   └── test_api.py
+│   ├── test_api.py
+│   ├── utils/
+│   │   ├── config_test.cpp
+│   │   ├── crypto_test.cpp
+│   │   ├── json_helper_test.cpp
+│   │   └── logger_test.cpp
+│   ├── model/
+│   │   └── model_json_test.cpp
+│   ├── db/
+│   │   └── dao_integration_test.cpp
+│   ├── middleware/
+│   │   └── auth_test.cpp
+│   ├── handler/
+│   │   ├── router_test.cpp
+│   │   ├── admin_handler_api_test.cpp
+│   │   └── problem_submission_api_test.cpp
+│   ├── judge/
+│   │   ├── judger_cli_test.cpp
+│   │   └── judger_cli_timeout_test.cpp
+│   ├── perf/
+│   │   └── perf_test.py
+│   ├── frontend/
+│   │   ├── api_smoke_check.sh
+│   │   ├── load_seed_data.sh
+│   │   ├── seed_frontend_data.sql
+│   │   └── frontend_display_test_cases.md
+│   └── support/
+│       └── http_test_client.h
 ├── tools/
-│   ├── register_admin
-│   └── reset_web_data
-├── web/                        # 前端静态文件（SPA、Monaco 编辑器等）
-│   ├── index.html
-│   ├── css/
-│   ├── js/
-│   └── pages/
-└── SPEC.md
+│   ├── register_admin.cpp
+│   └── reset_web_data.cpp
+└── web/                         # 前端静态文件（SPA）
+    ├── index.html
+    ├── css/
+    │   └── style.css
+    ├── js/
+    │   ├── api.js
+    │   ├── app.js
+    │   ├── utils.js
+    │   └── components/
+    │       ├── editor.js
+    │       ├── history.js
+    │       ├── login.js
+    │       ├── problem-detail.js
+    │       ├── problem-list.js
+    │       ├── submission-result.js
+    │       └── admin/
+    │           ├── dashboard.js
+    │           ├── language-config.js
+    │           └── problem-edit.js
+    ├── lib/
+    │   └── monaco/
+    │       └── README.md
+    └── pages/
+        ├── login.html
+        ├── register.html
+        ├── problem-list.html
+        ├── problem-detail.html
+        ├── submission-result.html
+        ├── history.html
+        └── admin/
+            ├── dashboard.html
+            ├── language-config.html
+            └── problem-edit.html
 ```
 
 ### 2.4 配置文件（YAML）

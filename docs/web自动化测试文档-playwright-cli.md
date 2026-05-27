@@ -249,7 +249,7 @@ playwright-cli click <运行测试按钮ref>
 playwright-cli snapshot
 ```
 
-**结果：✅ 通过** — 跳转到提交结果页，显示 PENDING / 判题进行中（若后端有 judge worker 则显示样例测试结果）
+**结果：✅ 通过** — 跳转到提交结果页，显示 PENDING → 自动判题 → 显示最终结果（ACCEPTED/TLE/RE 等）
 
 ### UI-JUDGE-003: 提交判题按钮
 
@@ -265,20 +265,37 @@ playwright-cli click <提交判题按钮ref>
 
 ```bash
 # 查看 ACCEPTED 结果
-playwright-cli goto "#/submissions/1"
+playwright-cli click <提交ID链接ref>
 playwright-cli snapshot
 
 # 查看 WRONG_ANSWER 结果
-playwright-cli goto "#/submissions/2"
+playwright-cli click <提交ID链接ref>
+playwright-cli snapshot
+
+# 查看 COMPILE_ERROR 结果
+playwright-cli click <提交ID链接ref>
+playwright-cli snapshot
+
+# 查看 TIME_LIMIT_EXCEEDED 结果
+playwright-cli click <提交ID链接ref>
+playwright-cli snapshot
+
+# 查看 RUNTIME_ERROR 结果
+playwright-cli click <提交ID链接ref>
 playwright-cli snapshot
 ```
 
 | 结果 | 状态 |
 |------|------|
-| **UI-JUDGE-004: ACCEPTED** | ✅ 通过 — 显示 total=1, passed=1, time=10ms, memory=1024KB |
-| **UI-JUDGE-005: WRONG_ANSWER** | ✅ 通过 — 显示 expected vs actual 输出 |
+| **UI-JUDGE-004: ACCEPTED** | ✅ 通过 — 显示 total=2, passed=2, time=10ms, 峰值内存 3712KB |
+| **UI-JUDGE-005: WRONG_ANSWER** | ✅ 通过 — 显示 expected vs actual 输出（期望"3"实际"1 2"） |
+| **UI-JUDGE-006: COMPILE_ERROR** | ✅ 通过 — 显示编译器错误信息（cc1plus error） |
+| **UI-JUDGE-007: TIME_LIMIT_EXCEEDED** | ✅ 通过 — 显示 TIME_LIMIT_EXCEEDED，耗时 ~1200ms |
+| **UI-JUDGE-008: RUNTIME_ERROR** | ✅ 通过 — 显示 RUNTIME_ERROR（如段错误、bad_alloc） |
+| **UI-JUDGE-009: MEMORY_LIMIT_EXCEEDED** | ⏳ 系统层面未单独区分（OOM 被判定为 RUNTIME_ERROR 或 TLE） |
+| **UI-JUDGE-010: SERVER_ERROR** | ⏳ 需后端异常场景 |
 | **UI-JUDGE-011: PENDING** | ✅ 通过 — 显示"判题进行中，自动刷新..."，持续轮询 |
-| **其他状态（TLE/MLE/RE/CE/SE）** | ⏳ 需准备对应提交数据 |
+| **UI-JUDGE-012: 其他状态** | ⏳ 无对应提交数据 |
 
 ### UI-JUDGE-013: 轮询停止
 
@@ -535,6 +552,17 @@ playwright-cli fill e<数字> "内容"
 playwright-cli select e<数字> "选项文本"
 ```
 
+### 操作 Monaco 编辑器
+
+页面代码编辑器基于 Monaco Editor，无法用 `fill` 直接设置内容。需要使用 `run-code` 通过 API 设置：
+
+```bash
+playwright-cli run-code "async page => { await page.evaluate(() => {
+  const model = window.monaco.editor.getModels()[0];
+  if (model) model.setValue('你的代码');
+}); }"
+```
+
 ### 清理状态
 
 在测试之间清理 localStorage 避免登录态污染：
@@ -591,10 +619,10 @@ playwright-cli console error         # 仅查看错误日志
 | 5.1 认证与会话 | 6 | 6 | 0 | 0 | ✅ |
 | 5.2 题目列表页 | 8 | 8 | 0 | 0 | ✅ |
 | 5.3 题目详情页与编辑器 | 7 | 7 | 0 | 0 | ✅ |
-| 5.4 运行测试与提交判题 | 14 | 6 | 0 | 8 | 部分状态无数据，判题无 worker |
+| 5.4 运行测试与提交判题 | 14 | 10 | 0 | 4 | 判题 worker 运行中，已验证 ACCEPTED/WRONG_ANSWER/COMPILE_ERROR/TLE/RE |
 | 5.5 提交历史页 | 5 | 5 | 0 | 0 | ✅ |
 | 5.6 管理后台 | 10 | 10 | 0 | 0 | ✅ |
 | 5.7 异常与边界场景 | 2 | 2 | 0 | 0 | ✅ |
-| **合计** | **52** | **42** | **0** | **10** | |
+| **合计** | **52** | **48** | **0** | **4** | |
 
-> 注：部分测试因后端无判题 worker（提交保持 PENDING）、缺少多账号数据而无法完整验证。可通过部署判题 worker 和准备多账号后补充。
+> 注：剩余 4 个无法测试的用例（MLE/SE/其他状态）因判题系统层面未单独区分或缺乏后端异常场景，待后续补充。

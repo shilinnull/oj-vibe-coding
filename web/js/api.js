@@ -1,4 +1,4 @@
-import { getToken } from "./utils.js";
+import { clearAuth, getCurrentUser, getToken } from "./utils.js";
 
 const API_BASE = "/api";
 
@@ -25,7 +25,12 @@ function toErrorMessage(payload, fallback = "请求失败") {
 }
 
 async function request(path, options = {}) {
-	const token = getToken();
+	const rawToken = getToken();
+	const currentUser = getCurrentUser();
+	const token = currentUser.token || "";
+	if (rawToken && !token) {
+		throw new ApiError("登录已过期，请重新登录", 401);
+	}
 	const headers = {
 		...(options.headers || {}),
 	};
@@ -56,6 +61,9 @@ async function request(path, options = {}) {
 	}
 
 	if (!response.ok) {
+		if (response.status === 401) {
+			clearAuth();
+		}
 		throw new ApiError(toErrorMessage(payload), response.status, payload);
 	}
 

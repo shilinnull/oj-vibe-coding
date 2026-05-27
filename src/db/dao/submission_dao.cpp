@@ -152,7 +152,8 @@ std::optional<Submission> SubmissionDao::GetById(std::int64_t id) {
 		StringOut out_src(65536);
 		StringOut out_mode(16);
 		StringOut out_status(32);
-		StringOut out_json(65536);
+		// result_json may be large (judge output), increase buffer to 256KB
+		StringOut out_json(262144);
 		int time_ms = 0;
 		bool null_time = false;
 		int mem_kb = 0;

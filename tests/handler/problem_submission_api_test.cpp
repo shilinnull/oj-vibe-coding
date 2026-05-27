@@ -470,3 +470,64 @@ TEST_F(ApiIntegrationTest, SubmissionApiCreatesAndFetchesSubmission) {
 	ASSERT_GE(history_json["items"].size(), 1u);
 	EXPECT_EQ(history_json["items"][0]["id"].get<std::int64_t>(), submission_id);
 }
+
+TEST_F(ApiIntegrationTest, SubmissionApiRunFallsBackToAllCasesWhenNoSampleCasesExist) {
+	DbCleanup cleanup(Pool());
+	oj::UserDao user_dao(Pool());
+	oj::ProblemDao problem_dao(Pool());
+	oj::TestCaseDao test_case_dao(Pool());
+
+	const std::string suffix = MakeUniqueSuffix();
+	const std::int64_t user_id = user_dao.CreateUser("api_run_user_" + suffix, "hash_" + suffix, "run@example.com");
+	cleanup.AddDeleteById("users", user_id);
+
+	oj::Problem problem;
+	problem.title = "Run fallback problem " + suffix;
+	problem.description = "Return sum";
+	problem.difficulty = "easy";
+	problem.time_limit_ms = 1000;
+	problem.memory_limit_kb = 65536;
+	problem.status = "published";
+	problem.created_by = user_id;
+
+	const std::int64_t problem_id = problem_dao.Create(problem);
+	cleanup.AddDeleteById("problems", problem_id);
+
+	oj::TestCase hidden;
+	hidden.problem_id = problem_id;
+	hidden.is_sample = false;
+	hidden.input = "1 2\n";
+	hidden.output = "3\n";
+	hidden.sort_order = 1;
+	const std::int64_t hidden_id = test_case_dao.Add(hidden);
+	cleanup.AddDeleteById("test_cases", hidden_id);
+
+	oj::AppConfig cfg;
+	cfg.auth.jwt.secret = "test-secret";
+	cfg.mysql = MakeMysqlConfig();
+	oj::HttpServer server(cfg);
+	httplib::Server raw_server;
+	server.router().Mount(raw_server);
+
+	const int port = FindFreePort();
+	ASSERT_GT(port, 0);
+	ServerGuard guard(raw_server, port);
+	ASSERT_TRUE(WaitForServer(port));
+
+	auto client = MakeClient(port);
+	nlohmann::json create_body = {
+			{"user_id", user_id},
+			{"problem_id", problem_id},
+			{"language_id", 1},
+			{"mode", "run"},
+			{"source_code", "#include <iostream>\nint main(){ long long a,b; if(!(std::cin>>a>>b)) return 0; std::cout << a+b << '\\n'; }"},
+	};
+	auto create_res = client.Post("/api/submissions", MakeJsonBody(create_body), "application/json");
+	ASSERT_TRUE(create_res);
+	EXPECT_EQ(create_res->status, 201);
+	auto create_json = nlohmann::json::parse(create_res->body);
+	ASSERT_TRUE(create_json.contains("result"));
+	EXPECT_EQ(create_json["sample_case_count"].get<std::size_t>(), 1u);
+	EXPECT_EQ(create_json["result"]["judge_scope"].get<std::string>(), "all");
+	EXPECT_EQ(create_json["result"]["status"].get<std::string>(), "PENDING");
+}

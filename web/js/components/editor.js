@@ -70,10 +70,23 @@ function createFallbackEditor(container, value) {
 export async function createCodeEditor(container, options = {}) {
 	const initialValue = options.value || "";
 	const lang = options.language || "cpp";
+	const onChange = typeof options.onChange === "function" ? options.onChange : null;
 
 	const ready = await ensureMonaco();
 	if (!ready || !window.monaco?.editor) {
-		return createFallbackEditor(container, initialValue);
+		const fallback = createFallbackEditor(container, initialValue);
+		if (onChange) {
+			const textarea = container.querySelector("textarea.code-fallback");
+			if (textarea) {
+				textarea.addEventListener("input", () => onChange(fallback.getValue()));
+			}
+			const originalSetValue = fallback.setValue;
+			fallback.setValue = (next) => {
+				originalSetValue(next);
+				onChange(fallback.getValue());
+			};
+		}
+		return fallback;
 	}
 
 	const editor = window.monaco.editor.create(container, {
@@ -88,6 +101,13 @@ export async function createCodeEditor(container, options = {}) {
 		scrollBeyondLastLine: false,
 	});
 
+	const changeListener = onChange
+		? editor.onDidChangeModelContent(() => {
+			const model = editor.getModel();
+			onChange(model ? model.getValue() : editor.getValue());
+		})
+		: null;
+
 	return {
 		getValue: () => editor.getValue(),
 		setValue: (next) => editor.setValue(next || ""),
@@ -97,6 +117,9 @@ export async function createCodeEditor(container, options = {}) {
 				window.monaco.editor.setModelLanguage(model, nextLang || "cpp");
 			}
 		},
-		dispose: () => editor.dispose(),
+		dispose: () => {
+			changeListener?.dispose?.();
+			editor.dispose();
+		},
 	};
 }

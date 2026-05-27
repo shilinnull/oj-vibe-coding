@@ -22,6 +22,19 @@ function decodeJwtPayload(token) {
 	}
 }
 
+function isJwtExpired(token) {
+	const payload = decodeJwtPayload(token);
+	if (!payload) {
+		return false;
+	}
+	const exp = Number(payload.exp || 0);
+	if (!Number.isFinite(exp) || exp <= 0) {
+		return false;
+	}
+	const now = Math.floor(Date.now() / 1000);
+	return now > exp;
+}
+
 export function getToken() {
 	return localStorage.getItem(STORAGE_KEYS.token) || "";
 }
@@ -53,6 +66,16 @@ export function clearAuth() {
 
 export function getCurrentUser() {
 	const token = getToken();
+	if (token && isJwtExpired(token)) {
+		clearAuth();
+		return {
+			token: "",
+			username: "",
+			userId: 0,
+			role: "",
+			isAuthed: false,
+		};
+	}
 	const username = localStorage.getItem(STORAGE_KEYS.username) || "";
 	const userId = Number(localStorage.getItem(STORAGE_KEYS.userId) || 0);
 	let role = localStorage.getItem(STORAGE_KEYS.role) || "";

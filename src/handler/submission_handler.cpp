@@ -147,8 +147,17 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& jud
 			}
 
 			TestCaseDao test_case_dao(pool);
-				const bool sample_mode = mode == "run";
-				const auto test_cases = test_case_dao.ListByProblem(*problem_id, sample_mode);
+			const bool sample_mode = mode == "run";
+			auto test_cases = test_case_dao.ListByProblem(*problem_id, sample_mode);
+			std::string judge_scope = sample_mode ? "sample" : "all";
+			if (sample_mode && test_cases.empty()) {
+				test_cases = test_case_dao.ListByProblem(*problem_id, false);
+				judge_scope = "all";
+			}
+			if (test_cases.empty()) {
+				SendJsonError(res, 400, "no test cases available");
+				return;
+			}
 
 				Submission submission;
 			submission.user_id = *user_id;
@@ -159,7 +168,7 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& jud
 			submission.status = "pending";
 			submission.result_json = json{{"status", "PENDING"},
 													{"mode", mode},
-												{"judge_scope", sample_mode ? "sample" : "all"},
+												{"judge_scope", judge_scope},
 												{"sample_case_count", test_cases.size()}}
 							.dump();
 				const std::int64_t submission_id = SubmissionDao(pool).Create(submission);
@@ -180,6 +189,7 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& jud
 			json response = SubmissionToResponse(submission);
 			response["id"] = submission_id;
 				response["sample_case_count"] = test_cases.size();
+				response["judge_scope"] = judge_scope;
 			SendJson(res, 201, response);
 		});
 	});

@@ -41,6 +41,11 @@ body {
 	z-index: -1;
 	filter: blur(22px);
 	opacity: 0.45;
+	}
+
+	pre {
+		/* Reset default pre margins so table cells align predictably */
+		margin: 0;
 }
 
 .bg-layer-a {
@@ -58,6 +63,10 @@ body {
 	left: -120px;
 	bottom: -80px;
 	background: #59c7c0;
+		/* ensure the output box fills the table cell and respects box-model */
+		display: block;
+		width: 100%;
+		box-sizing: border-box;
 	animation: drift-b 11s ease-in-out infinite;
 }
 
@@ -396,6 +405,54 @@ td {
 th {
 	color: var(--ink-soft);
 	font-size: 13px;
+}
+
+.output-container {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.output-container,
+.output {
+	/* make sure output boxes behave as simple block boxes inside table cells */
+	display: block;
+ 	margin: 0;
+}
+.output-container {
+	/* keep internal stacking but ensure children start from the top */
+	display: flex;
+ 	flex-direction: column;
+ 	align-items: flex-start;
+}
+.output {
+	background: #f8f8f8;
+	border: 1px solid rgba(0,0,0,0.04);
+	padding: 10px;
+	border-radius: 8px;
+	font-family: monospace;
+	font-size: 13px;
+	white-space: pre-wrap;
+	word-break: normal;
+}
+
+/* Ensure the output elements occupy the top of the table cell and have no unexpected margins
+   This defends against browser/user-agent styles or other rules that could vertically
+   centre small boxes inside taller rows. */
+td > .output,
+td > .output-container {
+    margin-top: 0;
+}
+.output.preview.collapsed {
+	max-height: 180px;
+	overflow: hidden;
+}
+.output.full {
+	white-space: pre-wrap;
+}
+.output-toggle {
+	align-self: flex-start;
+	padding: 6px 8px;
+	font-size: 12px;
 }
 
 .editor-wrap {

@@ -42,6 +42,11 @@ export function initAdminDashboardPage() {
 			if (aborted) return;
 			renderSubmissions(payload?.items || []);
 		} catch (e) {
+			if (Number(e?.status || 0) === 401) {
+				showToast("登录已过期，请重新登录", "error");
+				window.location.hash = "#/login";
+				return;
+			}
 			showToast(e?.message || "加载失败", "error");
 		} finally {
 			setVisible($("admin-submissions-loading"), false);

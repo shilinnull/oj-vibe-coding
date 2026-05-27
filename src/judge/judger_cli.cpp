@@ -192,6 +192,13 @@ static std::string read_file(const std::string& path) {
 	return ss.str();
 }
 
+static std::string normalize_output(std::string text) {
+	while (!text.empty() && (text.back() == '\n' || text.back() == '\r' || text.back() == ' ' || text.back() == '\t')) {
+		text.pop_back();
+	}
+	return text;
+}
+
 static void write_file(const std::string& path, const std::string& content) {
 	std::ofstream ofs(path);
 	ofs << content;
@@ -236,6 +243,19 @@ int main() {
 	std::string language = req.value("language", "cpp");
 	std::string source_code = req.value("source_code", std::string());
 	int time_limit_ms = req.value("time_limit_ms", 1000);
+	// Clamp to a maximum allowed time to avoid runaway long-running submissions.
+	// Can be overridden by environment variable JUDGER_MAX_TIME_MS (in milliseconds).
+	int max_time_limit_ms = 10000; // default 10s
+	const char* env_max = std::getenv("JUDGER_MAX_TIME_MS");
+	if (env_max) {
+		try {
+			int v = std::stoi(std::string(env_max));
+			if (v > 0) max_time_limit_ms = v;
+		} catch (...) {
+			// ignore parse errors
+		}
+	}
+	if (time_limit_ms > max_time_limit_ms) time_limit_ms = max_time_limit_ms;
 	int memory_limit_kb = req.value("memory_limit_kb", 262144);
 	std::string work_dir = req.value("work_dir", std::string("./run/judge"));
 	std::string compile_cmd = req.value("compile_cmd", std::string("g++ -O2 -std=c++17 {source} -o {output}"));
@@ -312,18 +332,32 @@ int main() {
 		RunResult rr = run_program_with_limits(binary_path, in_path, out_path, run_err, time_limit_ms, memory_limit_kb);
 		total_time_ms += rr.time_ms;
 
-		std::string actual = read_file(out_path);
+		// limit actual output size to avoid producing excessively large JSON
+		const size_t MAX_ACTUAL_OUTPUT = 64 * 1024; // 64 KB per test case
+		std::string actual_full = read_file(out_path);
+		bool actual_truncated = false;
+		std::string actual = actual_full;
+		if (actual_full.size() > MAX_ACTUAL_OUTPUT) {
+			actual = actual_full.substr(0, MAX_ACTUAL_OUTPUT);
+			actual_truncated = true;
+		}
 
 		json r;
 		r["test_case_id"] = tc_id;
 		r["time_ms"] = rr.time_ms;
 		r["memory_kb"] = rr.memory_kb;
 		r["actual_output"] = actual;
+		if (actual_truncated) r["actual_truncated"] = true;
 		r["expected_output"] = expected;
 
 		if (rr.status == "accepted") {
-			r["status"] = "accepted";
-			passed++;
+			if (normalize_output(actual) == normalize_output(expected)) {
+				r["status"] = "accepted";
+				passed++;
+			} else {
+				r["status"] = "wrong_answer";
+				out["status"] = "wrong_answer";
+			}
 		} else if (rr.status == "time_limit_exceeded") {
 			r["status"] = "time_limit_exceeded";
 			out["status"] = "time_limit_exceeded";

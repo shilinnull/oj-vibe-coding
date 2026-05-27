@@ -63,6 +63,23 @@ function getStarterCode(monacoLang) {
 	].join("\n");
 }
 
+function getDraftKey(problemId, languageId) {
+	return `oj_problem_draft_${problemId}_${languageId}`;
+}
+
+function getDraftLanguageKey(problemId) {
+	return `oj_problem_draft_lang_${problemId}`;
+}
+
+function loadDraft(problemId, languageId) {
+	return localStorage.getItem(getDraftKey(problemId, languageId)) || "";
+}
+
+function saveDraft(problemId, languageId, sourceCode) {
+	localStorage.setItem(getDraftKey(problemId, languageId), sourceCode || "");
+	localStorage.setItem(getDraftLanguageKey(problemId), String(languageId || 0));
+}
+
 export function initProblemDetailPage(ctx) {
 	const id = Number(ctx.route.params.id || 0);
 	const titleEl = document.getElementById("problem-title");
@@ -78,6 +95,7 @@ export function initProblemDetailPage(ctx) {
 	let editor = null;
 	let languageOptions = [];
 	let activeLanguage = { id: 1, monacoLang: "cpp" };
+	let restoringEditor = false;
 
 	if (!id) {
 		titleEl.textContent = "题目不存在";
@@ -90,9 +108,19 @@ export function initProblemDetailPage(ctx) {
 			.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`)
 			.join("");
 		activeLanguage = languageOptions[0] || activeLanguage;
+		const savedLanguageId = Number(localStorage.getItem(getDraftLanguageKey(id)) || 0);
+		activeLanguage = languageOptions.find((item) => item.id === savedLanguageId) || languageOptions[0] || activeLanguage;
+		langSelect.value = String(activeLanguage.id || 1);
+		const savedCode = loadDraft(id, activeLanguage.id);
 		editor = await createCodeEditor(editorHost, {
 			language: activeLanguage.monacoLang,
-			value: getStarterCode(activeLanguage.monacoLang),
+			value: savedCode || getStarterCode(activeLanguage.monacoLang),
+			onChange: (sourceCode) => {
+				if (restoringEditor) {
+					return;
+				}
+				saveDraft(id, activeLanguage.id, sourceCode);
+			},
 		});
 	}
 
@@ -126,6 +154,7 @@ export function initProblemDetailPage(ctx) {
 			showToast("代码不能为空", "error");
 			return;
 		}
+		saveDraft(id, activeLanguage.id, sourceCode);
 
 		runBtn.disabled = true;
 		submitBtn.disabled = true;
@@ -154,8 +183,17 @@ export function initProblemDetailPage(ctx) {
 		if (!found) {
 			return;
 		}
+		const previousLanguageId = activeLanguage.id;
+		const currentCode = editor?.getValue?.() || "";
+		if (previousLanguageId) {
+			saveDraft(id, previousLanguageId, currentCode);
+		}
 		activeLanguage = found;
+		const nextCode = loadDraft(id, found.id) || getStarterCode(found.monacoLang);
+		restoringEditor = true;
 		editor?.setLanguage(found.monacoLang);
+		editor?.setValue(nextCode);
+		restoringEditor = false;
 	};
 
 	const onRun = () => submit("run");

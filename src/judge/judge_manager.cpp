@@ -54,6 +54,27 @@ static std::string read_fd_all(int fd) {
 	return ss.str();
 }
 
+// Read up to max_bytes from fd. If content exceeds max_bytes, stop and set truncated=true.
+static std::string read_fd_limited(int fd, size_t max_bytes, bool &truncated) {
+	std::string out;
+	out.reserve(std::min<size_t>(max_bytes, 4096));
+	char buf[4096];
+	ssize_t n;
+	size_t total = 0;
+	truncated = false;
+	while ((n = read(fd, buf, sizeof(buf))) > 0) {
+		if (total + (size_t)n > max_bytes) {
+			size_t can = (total >= max_bytes) ? 0 : (max_bytes - total);
+			if (can > 0) out.append(buf, can);
+			truncated = true;
+			break;
+		}
+		out.append(buf, n);
+		total += (size_t)n;
+	}
+	return out;
+}
+
 static std::string resolve_judger_cli_path() {
 	for (const char* candidate : {
 				"./run/judger_cli",
@@ -119,12 +140,18 @@ void JudgeManager::worker_thread() {
 		(void)w;
 		close(inpipe[1]);
 
-		// 读取子进程输出
-		std::string out = read_fd_all(outpipe[0]);
-		close(outpipe[0]);
-
+		// 等待子进程结束，再读取其 stdout（顺序调整可避免读取到不完整的输出导致 JSON 解析失败）
 		int status = 0;
 		waitpid(pid, &status, 0);
+
+		// 读取子进程输出（限制最大读取量以防止过大输出耗尽内存或日志）
+		const size_t MAX_READ_BYTES = 128 * 1024; // 128 KB
+		bool truncated = false;
+		std::string out = read_fd_limited(outpipe[0], MAX_READ_BYTES, truncated);
+		if (truncated) {
+			out += "\n... (truncated)";
+		}
+		close(outpipe[0]);
 
 		std::string final_status = "system_error";
 		std::string stored_result;
@@ -158,7 +185,15 @@ void JudgeManager::worker_thread() {
 					  << " 失败: " << e.what() << "\n";
 		}
 
-		std::cerr << "JudgeManager: submission_id=" << job.submission_id << " finished, result=" << out << "\n";
+		// Print concise log only (avoid dumping full judge output which may be huge).
+		size_t preview_len = 2048;
+		std::string preview = out.size() > preview_len ? out.substr(0, preview_len) + "\n... (preview truncated)" : out;
+		std::cerr << "JudgeManager: submission_id=" << job.submission_id
+			  << " finished, status=" << final_status
+			  << ", time_ms=" << time_ms
+			  << ", memory_kb=" << memory_kb
+			  << ", output_preview_len=" << preview.size()
+			  << "\n";
 	}
 }
 

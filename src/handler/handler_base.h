@@ -6,7 +6,7 @@
 #include <optional>
 #include <string>
 
-#include <httplib.h>
+#include "net/http.hpp"
 #include <nlohmann/json.hpp>
 
 #include "utils/json_helper.h"
@@ -18,8 +18,8 @@ namespace handler {
 using json = nlohmann::json;
 
 inline void SendJson(httplib::Response& res, int status, const json& body) {
-	res.status = status;
-	res.set_content(body.dump(), "application/json");
+	res._statu = status;
+	res.SetContent(body.dump(), "application/json");
 }
 
 inline void SendJsonError(httplib::Response& res,
@@ -51,11 +51,11 @@ inline int ClampInt(int value, int min_value, int max_value) {
 }
 
 inline int ParseIntParam(const httplib::Request& req, const char* key, int default_value) {
-	if (!req.has_param(key)) {
+	if (!req.HasParam(key)) {
 		return default_value;
 	}
 	try {
-		return std::stoi(req.get_param_value(key));
+		return std::stoi(req.GetParam(key));
 	} catch (...) {
 		return default_value;
 	}
@@ -64,7 +64,7 @@ inline int ParseIntParam(const httplib::Request& req, const char* key, int defau
 inline std::optional<json> ParseJsonBody(const httplib::Request& req,
 															httplib::Response& res) {
 	std::string parse_error;
-	auto body = TryParseJson(req.body, &parse_error);
+	auto body = TryParseJson(req._body, &parse_error);
 	if (!body.has_value()) {
 		SendJsonError(res, 400, "invalid json", parse_error);
 		return std::nullopt;

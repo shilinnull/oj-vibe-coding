@@ -4,11 +4,13 @@
 #include <string>
 #include <vector>
 
-#include <httplib.h>
+#include "http.hpp"
+
+class HttpServer;
 
 namespace oj {
 
-// 轻量级路由表：先把路由和回调保存起来，最后统一挂到 httplib::Server 上。
+// 轻量级路由表：先把路由和回调保存起来，最后统一挂到 HTTP server 上。
 class Router {
  public:
 	using Handler = std::function<void(const httplib::Request&, httplib::Response&)>;
@@ -19,8 +21,7 @@ class Router {
 	void Put(const std::string& pattern, Handler handler);
 	void Delete(const std::string& pattern, Handler handler);
 
-	// 把已登记的路由一次性注册到 httplib 的 server 上。
-	void Mount(httplib::Server& server) const;
+	void Mount(::HttpServer& server) const;
 
  private:
 	enum class Method { Get, Post, Put, Delete };

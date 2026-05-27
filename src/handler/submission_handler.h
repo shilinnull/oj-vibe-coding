@@ -2,7 +2,7 @@
 
 #include "db/mysql_pool.h"
 #include "judge/judge_manager.h"
-#include "router.h"
+#include "net/router.h"
 
 namespace oj {
 

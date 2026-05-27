@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "net/http.hpp"
 #include "utils/logger.h"
 #include "handler/auth_handler.h"
 #include "handler/admin_handler.h"
@@ -45,16 +46,16 @@ std::string HtmlEscape(std::string text) {
 	return text;
 }
 
-void SendApiError(httplib::Response& res, int status, const std::string& error, const std::string& message) {
+void SendApiError(HttpResponse& res, int status, const std::string& error, const std::string& message) {
 	nlohmann::json body{{"error", error}};
 	if (!message.empty()) {
 		body["message"] = message;
 	}
-	res.status = status;
-	res.set_content(body.dump(), "application/json");
+	res._statu = status;
+	res.SetContent(body.dump(), "application/json");
 }
 
-void SendHtmlError(httplib::Response& res, int status, const std::string& title, const std::string& message) {
+void SendHtmlError(HttpResponse& res, int status, const std::string& title, const std::string& message) {
 	std::ostringstream html;
 	html << "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
 			 << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
@@ -67,8 +68,8 @@ void SendHtmlError(httplib::Response& res, int status, const std::string& title,
 			 << "<main class=\"wrap\"><section class=\"card\"><h1>" << status << " " << HtmlEscape(title)
 			 << "</h1><p>" << HtmlEscape(message)
 			 << "</p><p style=\"margin-top:14px\"><a href=\"/\">返回首页</a></p></section></main></body></html>";
-	res.status = status;
-	res.set_content(html.str(), "text/html; charset=utf-8");
+	res._statu = status;
+	res.SetContent(html.str(), "text/html; charset=utf-8");
 }
 
 std::string ReadTextFile(const std::string& path) {
@@ -83,70 +84,21 @@ std::string ReadTextFile(const std::string& path) {
 
 }  // namespace
 
+
 HttpServer::HttpServer(const oj::AppConfig& cfg) {
-	server_.set_default_headers({
-			{"X-Content-Type-Options", "nosniff"},
-			{"X-Frame-Options", "SAMEORIGIN"},
-			{"Referrer-Policy", "strict-origin-when-cross-origin"},
-	});
-
-	server_.set_exception_handler([](const httplib::Request& req,
-											httplib::Response& res,
-											std::exception_ptr ep) {
-		std::string message = "unexpected exception";
-		try {
-			if (ep) {
-				std::rethrow_exception(ep);
-			}
-		} catch (const std::exception& e) {
-			message = e.what();
-		}
-		OJ_LOG_ERROR(std::string("unhandled exception on ") + req.path + ": " + message);
-		if (IsApiPath(req.path)) {
-			SendApiError(res, 500, "internal", message);
-		} else {
-			SendHtmlError(res, 500, "Internal Server Error", "服务器发生异常，请稍后重试。");
-		}
-	});
-
 	// 健康检查接口，给部署环境和容器探活用。
 	router_.Get("/healthz", [](const httplib::Request&, httplib::Response& res) {
-		res.set_content("ok", "text/plain; charset=utf-8");
+		res.SetContent("ok", "text/plain; charset=utf-8");
 	});
 
 	std::string index_html;
 	const std::string web_dir = ResolveExistingPath({"./web", "../web", "../../web"});
 	if (!web_dir.empty()) {
 		index_html = ReadTextFile((std::filesystem::path(web_dir) / "index.html").string());
-		if (!server_.set_mount_point("/", web_dir)) {
-			OJ_LOG_WARN(std::string("failed to mount static web dir: ") + web_dir);
-		} else {
-			OJ_LOG_INFO(std::string("mounted static web dir: ") + web_dir);
-		}
+		OJ_LOG_INFO(std::string("mounted static web dir: ") + web_dir);
 	} else {
 		OJ_LOG_WARN("web directory not found; static frontend is unavailable");
 	}
-
-	server_.set_error_handler([index_html = std::move(index_html)](const httplib::Request& req, httplib::Response& res) {
-		if (res.status == 404 && !IsApiPath(req.path) && req.method == "GET" && !index_html.empty()) {
-			res.status = 200;
-			res.set_content(index_html, "text/html; charset=utf-8");
-			return;
-		}
-
-		if (IsApiPath(req.path)) {
-			std::string err = res.status == 404 ? "not found" : "request failed";
-			SendApiError(res, res.status == 0 ? 500 : res.status, err, std::string());
-			return;
-		}
-
-		const int status = res.status == 0 ? 500 : res.status;
-		if (status == 404) {
-			SendHtmlError(res, 404, "Not Found", "请求的页面不存在。");
-		} else {
-			SendHtmlError(res, status, "Request Failed", "请求处理失败，请检查后重试。");
-		}
-	});
 
 	// 服务启动时先初始化数据库连接池，再把认证相关路由挂进去。
 	try {
@@ -162,16 +114,79 @@ HttpServer::HttpServer(const oj::AppConfig& cfg) {
 	}
 }
 
-void HttpServer::MountRoutes() {
-	// 统一把业务路由挂到 httplib server 上，避免各处零散注册。
-	router_.Mount(server_);
-}
-
 void HttpServer::Listen(const char* host, int port) {
-	MountRoutes();
+	(void)host;
+	::HttpServer muduo_server(port);
+	std::unordered_map<std::string, std::string> default_headers{{
+		{"X-Content-Type-Options", "nosniff"},
+		{"X-Frame-Options", "SAMEORIGIN"},
+		{"Referrer-Policy", "strict-origin-when-cross-origin"},
+	}};
+	muduo_server.SetDefaultHeaders(default_headers);
+
+	std::string web_dir;
+	std::string index_html;
+	for (const char* candidate : {"./web", "../web", "../../web"}) {
+		std::error_code ec;
+		if (std::filesystem::exists(candidate, ec)) {
+			web_dir = std::filesystem::path(candidate).lexically_normal().string();
+			break;
+		}
+	}
+	if (!web_dir.empty()) {
+		index_html = ReadTextFile((std::filesystem::path(web_dir) / "index.html").string());
+		muduo_server.SetBaseDir(web_dir);
+		OJ_LOG_INFO(std::string("mounted static web dir: ") + web_dir);
+	} else {
+		OJ_LOG_WARN("web directory not found; static frontend is unavailable");
+	}
+	const std::string index_html_copy = index_html;
+
+	muduo_server.SetExceptionHandler([index_html_copy](const HttpRequest& req,
+																			HttpResponse* res,
+																			std::exception_ptr ep) {
+		std::string message = "unexpected exception";
+		try {
+			if (ep) {
+				std::rethrow_exception(ep);
+				}
+		} catch (const std::exception& e) {
+			message = e.what();
+		}
+		OJ_LOG_ERROR(std::string("unhandled exception on ") + req._path + ": " + message);
+		if (IsApiPath(req._path)) {
+			SendApiError(*res, 500, "internal", message);
+		} else {
+			SendHtmlError(*res, 500, "Internal Server Error", "服务器发生异常，请稍后重试。");
+		}
+	});
+
+	muduo_server.SetErrorHandler([index_html_copy](const HttpRequest& req, HttpResponse* res) {
+		if (res == nullptr) {
+			return;
+		}
+		if (res->_statu == 404 && !IsApiPath(req._path) && req._method == "GET" && !index_html_copy.empty()) {
+			res->_statu = 200;
+			res->SetContent(index_html_copy, "text/html; charset=utf-8");
+			return;
+		}
+		if (IsApiPath(req._path)) {
+			std::string err = res->_statu == 404 ? "not found" : "request failed";
+			SendApiError(*res, res->_statu == 0 ? 500 : res->_statu, err, std::string());
+			return;
+		}
+		const int status = res->_statu == 0 ? 500 : res->_statu;
+		if (status == 404) {
+			SendHtmlError(*res, 404, "Not Found", "请求的页面不存在。");
+		} else {
+			SendHtmlError(*res, status, "Request Failed", "请求处理失败，请检查后重试。");
+		}
+	});
+
+	router_.Mount(muduo_server);
 	// listen() 会阻塞，所以这里就是服务真正开始接收请求的地方。
 	OJ_LOG_INFO(std::string("listening on ") + host + ":" + std::to_string(port));
-	server_.listen(host, port);
+	muduo_server.Listen();
 }
 
 }  // namespace oj

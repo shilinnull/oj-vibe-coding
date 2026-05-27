@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-#include <httplib.h>
+#include "net/http.hpp"
 
 namespace oj {
 

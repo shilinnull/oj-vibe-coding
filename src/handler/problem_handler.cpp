@@ -33,8 +33,8 @@ void RegisterProblemRoutes(Router& router, MySqlPool& pool) {
 		GuardJsonHandler(res, [&]() {
 			const int limit = ClampInt(ParseIntParam(req, "limit", 20), 1, 100);
 			const int offset = std::max(0, ParseIntParam(req, "offset", 0));
-			const std::string status = req.has_param("status")
-							? NormalizeStatusFilter(req.get_param_value("status"))
+			const std::string status = req.HasParam("status")
+										? NormalizeStatusFilter(req.GetParam("status"))
 							: std::string();
 
 			ProblemDao dao(pool);
@@ -49,12 +49,12 @@ void RegisterProblemRoutes(Router& router, MySqlPool& pool) {
 
 	router.Get(R"(/api/problems/(\d+))", [&pool](const httplib::Request& req, httplib::Response& res) {
 		GuardJsonHandler(res, [&]() {
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJsonError(res, 400, "invalid problem id");
 				return;
 			}
 
-			auto id = ParseInt64(req.matches[1]);
+			auto id = ParseInt64(req._matches[1]);
 			if (!id.has_value() || *id <= 0) {
 				SendJsonError(res, 400, "invalid problem id");
 				return;

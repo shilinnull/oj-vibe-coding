@@ -17,14 +17,14 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <httplib.h>
+#include "../support/http_test_client.h"
 #include <nlohmann/json.hpp>
 
 #include "db/dao/problem_dao.h"
 #include "db/dao/submission_dao.h"
 #include "db/dao/test_case_dao.h"
 #include "db/dao/user_dao.h"
-#include "server.h"
+#include "server/server.h"
 
 namespace {
 
@@ -67,19 +67,7 @@ int FindFreePort() {
 }
 
 bool WaitForServer(int port) {
-	httplib::Client client("127.0.0.1", port);
-	client.set_connection_timeout(1, 0);
-	client.set_read_timeout(1, 0);
-
-	for (int i = 0; i < 50; ++i) {
-		auto res = client.Get("/healthz");
-		if (res) {
-			return true;
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	}
-
-	return false;
+	return test_support::WaitForServer(port);
 }
 
 class RawMysqlConnection {
@@ -262,26 +250,6 @@ class DbCleanup {
 	std::vector<std::function<void()>> actions_;
 };
 
-class ServerGuard {
- public:
-	ServerGuard(httplib::Server& server, int port)
-		: server_(server), thread_([&server, port]() { server.listen("127.0.0.1", port); }) {}
-
-	~ServerGuard() {
-		server_.stop();
-		if (thread_.joinable()) {
-			thread_.join();
-		}
-	}
-
-	ServerGuard(const ServerGuard&) = delete;
-	ServerGuard& operator=(const ServerGuard&) = delete;
-
- private:
-	httplib::Server& server_;
-	std::thread thread_;
-};
-
 class ApiIntegrationTest : public ::testing::Test {
  protected:
 	static void SetUpTestSuite() {
@@ -302,8 +270,8 @@ class ApiIntegrationTest : public ::testing::Test {
 
 std::unique_ptr<oj::MySqlPool> ApiIntegrationTest::pool_;
 
-httplib::Client MakeClient(int port) {
-	httplib::Client client("127.0.0.1", port);
+test_support::HttpClient MakeClient(int port) {
+	test_support::HttpClient client("127.0.0.1", port);
 	client.set_connection_timeout(1, 0);
 	client.set_read_timeout(2, 0);
 	return client;
@@ -358,13 +326,11 @@ TEST_F(ApiIntegrationTest, ProblemApiReturnsListAndDetail) {
 	oj::AppConfig cfg;
 	cfg.auth.jwt.secret = "test-secret";
 	cfg.mysql = MakeMysqlConfig();
-	oj::HttpServer server(cfg);
-	httplib::Server raw_server;
-	server.router().Mount(raw_server);
+	auto server = std::make_shared<oj::HttpServer>(cfg);
 
 	const int port = FindFreePort();
 	ASSERT_GT(port, 0);
-	ServerGuard guard(raw_server, port);
+	test_support::StartDetachedServer(server, [port](oj::HttpServer& s) { s.Listen("127.0.0.1", port); });
 	ASSERT_TRUE(WaitForServer(port));
 
 	auto client = MakeClient(port);
@@ -422,13 +388,11 @@ TEST_F(ApiIntegrationTest, SubmissionApiCreatesAndFetchesSubmission) {
 	oj::AppConfig cfg;
 	cfg.auth.jwt.secret = "test-secret";
 	cfg.mysql = MakeMysqlConfig();
-	oj::HttpServer server(cfg);
-	httplib::Server raw_server;
-	server.router().Mount(raw_server);
+	auto server = std::make_shared<oj::HttpServer>(cfg);
 
 	const int port = FindFreePort();
 	ASSERT_GT(port, 0);
-	ServerGuard guard(raw_server, port);
+	test_support::StartDetachedServer(server, [port](oj::HttpServer& s) { s.Listen("127.0.0.1", port); });
 	ASSERT_TRUE(WaitForServer(port));
 
 	auto client = MakeClient(port);
@@ -505,13 +469,11 @@ TEST_F(ApiIntegrationTest, SubmissionApiRunFallsBackToAllCasesWhenNoSampleCasesE
 	oj::AppConfig cfg;
 	cfg.auth.jwt.secret = "test-secret";
 	cfg.mysql = MakeMysqlConfig();
-	oj::HttpServer server(cfg);
-	httplib::Server raw_server;
-	server.router().Mount(raw_server);
+	auto server = std::make_shared<oj::HttpServer>(cfg);
 
 	const int port = FindFreePort();
 	ASSERT_GT(port, 0);
-	ServerGuard guard(raw_server, port);
+	test_support::StartDetachedServer(server, [port](oj::HttpServer& s) { s.Listen("127.0.0.1", port); });
 	ASSERT_TRUE(WaitForServer(port));
 
 	auto client = MakeClient(port);

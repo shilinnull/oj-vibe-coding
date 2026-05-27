@@ -8,9 +8,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(OJ_BUILD_TESTS "Build unit tests" ON)
 
-find_path(CPPHTTPLIB_INCLUDE_DIR NAMES httplib.h REQUIRED)
-find_library(CPPHTTPLIB_LIBRARY NAMES cpp-httplib libcpp-httplib httplib PATHS /lib /lib/x86_64-linux-gnu /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib REQUIRED)
-
 find_package(yaml-cpp REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(OpenSSL REQUIRED)
@@ -37,8 +34,8 @@ target_sources(oj_core
 		src/model/submission.cpp
 		src/model/test_case.cpp
 		src/model/language.cpp
-		src/server.cpp
-		src/router.cpp
+		src/server/server.cpp
+		src/net/router.cpp
 		src/middleware/auth.cpp
 		src/handler/auth_handler.cpp
 		src/handler/problem_handler.cpp
@@ -50,7 +47,6 @@ target_sources(oj_core
 target_include_directories(oj_core
 	PUBLIC
 		${CMAKE_CURRENT_SOURCE_DIR}/src
-		${CPPHTTPLIB_INCLUDE_DIR}
 		${MYSQLCLIENT_INCLUDE_DIRS}
 )
 
@@ -59,7 +55,6 @@ target_link_libraries(oj_core
 		yaml-cpp::yaml-cpp
 		nlohmann_json::nlohmann_json
 		${MYSQLCLIENT_LIBRARIES}
-		${CPPHTTPLIB_LIBRARY}
         OpenSSL::SSL
         OpenSSL::Crypto
 )

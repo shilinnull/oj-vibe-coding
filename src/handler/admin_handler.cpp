@@ -36,8 +36,8 @@ using json = nlohmann::json;
 namespace {
 
 void SendJson(httplib::Response& res, int status, const json& body) {
-	res.status = status;
-	res.set_content(body.dump(), "application/json");
+	res._statu = status;
+	res.SetContent(body.dump(), "application/json");
 }
 
 std::optional<std::int64_t> ParseInt64(const std::string& text) {
@@ -56,9 +56,9 @@ int ClampInt(int value, int min_value, int max_value) {
 }
 
 int ParseIntParam(const httplib::Request& req, const char* key, int default_value) {
-	if (!req.has_param(key)) return default_value;
+	if (!req.HasParam(key)) return default_value;
 	try {
-		return std::stoi(req.get_param_value(key));
+		return std::stoi(req.GetParam(key));
 	} catch (...) {
 		return default_value;
 	}
@@ -81,7 +81,7 @@ std::optional<AuthInfo> RequireAdmin(const httplib::Request& req,
 
 std::optional<json> ParseBody(const httplib::Request& req, httplib::Response& res) {
 	std::string error;
-	auto body = TryParseJson(req.body, &error);
+	auto body = TryParseJson(req._body, &error);
 	if (!body.has_value()) {
 		SendJson(res, 400, json{{"error", "invalid json"}, {"message", error}});
 		return std::nullopt;
@@ -235,11 +235,11 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
 			}
-			auto id = ParseInt64(req.matches[1]);
+			auto id = ParseInt64(req._matches[1]);
 			if (!id.has_value() || *id <= 0) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
@@ -263,11 +263,11 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
 			}
-			auto id = ParseInt64(req.matches[1]);
+			auto id = ParseInt64(req._matches[1]);
 			if (!id.has_value() || *id <= 0) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
@@ -305,11 +305,11 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
 			}
-			auto id = ParseInt64(req.matches[1]);
+			auto id = ParseInt64(req._matches[1]);
 			if (!id.has_value() || *id <= 0) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
@@ -330,11 +330,11 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
 			}
-			auto pid = ParseInt64(req.matches[1]);
+			auto pid = ParseInt64(req._matches[1]);
 			if (!pid.has_value() || *pid <= 0) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
@@ -373,11 +373,11 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
 			}
-			auto pid = ParseInt64(req.matches[1]);
+			auto pid = ParseInt64(req._matches[1]);
 			if (!pid.has_value() || *pid <= 0) {
 				SendJson(res, 400, json{{"error", "invalid problem id"}});
 				return;
@@ -390,12 +390,12 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 
 			std::string zip_bytes;
 			std::string filename;
-			if (req.is_multipart_form_data() && req.has_file("file")) {
-				auto file = req.get_file_value("file");
+			if (req.IsMultipartFormData() && req.HasFile("file")) {
+				auto file = req.GetFileValue("file");
 				zip_bytes = file.content;
 				filename = file.filename;
 			} else {
-				zip_bytes = req.body;
+				zip_bytes = req._body;
 			}
 			if (zip_bytes.empty()) {
 				SendJson(res, 400, json{{"error", "zip file required"}});
@@ -496,13 +496,13 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJson(res, 400, json{{"error", "invalid language id"}});
 				return;
 			}
 			int id = 0;
 			try {
-				id = std::stoi(req.matches[1]);
+				id = std::stoi(req._matches[1]);
 			} catch (...) {
 				SendJson(res, 400, json{{"error", "invalid language id"}});
 				return;
@@ -559,11 +559,11 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
 			( void )admin;
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJson(res, 400, json{{"error", "invalid user id"}});
 				return;
 			}
-			auto uid = ParseInt64(req.matches[1]);
+			auto uid = ParseInt64(req._matches[1]);
 			if (!uid.has_value() || *uid <= 0) {
 				SendJson(res, 400, json{{"error", "invalid user id"}});
 				return;

@@ -2,8 +2,6 @@
 
 #include <string>
 
-#include <httplib.h>
-
 #include "middleware/auth.h"
 
 TEST(AuthTest, JwtRoundTripAndExpiry) {
@@ -37,7 +35,7 @@ TEST(AuthTest, AuthenticateRequestReadsBearerToken) {
 	const std::string token = oj::GenerateJwt(secret, 7, "bob", "admin", 3600);
 
 	httplib::Request req;
-	req.headers.emplace("Authorization", "Bearer " + token);
+	req._headers.emplace("Authorization", "Bearer " + token);
 
 	auto info = oj::AuthenticateRequest(secret, req);
 	ASSERT_TRUE(info.has_value());

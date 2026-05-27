@@ -2,9 +2,9 @@
 
 #include <memory>
 
-#include <httplib.h>
+#include "net/http.hpp"
 
-#include "router.h"
+#include "net/router.h"
 #include "utils/config.h"
 #include "db/mysql_pool.h"
 #include "judge/judge_manager.h"
@@ -18,13 +18,11 @@ class HttpServer {
 
 	// 业务代码通过这个入口注册路由，启动前统一 Mount 到 server。
 	Router& router() { return router_; }
-	void MountRoutes();
 
 	// 阻塞启动服务，直到进程退出或 server 停止。
 	void Listen(const char* host, int port);
 
  private:
-	httplib::Server server_{};
 	Router router_{};
 	std::unique_ptr<MySqlPool> pool_{};
 	std::unique_ptr<JudgeManager> judge_manager_{};

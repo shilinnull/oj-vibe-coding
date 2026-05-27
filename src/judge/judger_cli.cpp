@@ -207,13 +207,19 @@ static void write_file(const std::string& path, const std::string& content) {
 static std::string resolve_sandbox_preload_path() {
 	const std::filesystem::path cwd = std::filesystem::current_path();
 	const std::filesystem::path candidates[] = {
-		cwd / "run" / "libjudge_sandbox_preload.so",
-		cwd / "run" / "libsandbox_preload.so",
-		cwd / "build" / "run" / "libjudge_sandbox_preload.so",
-		cwd / "build" / "run" / "libsandbox_preload.so",
-		std::filesystem::path("./run/libjudge_sandbox_preload.so"),
-		std::filesystem::path("./run/libsandbox_preload.so"),
-	};
+        cwd / "run" / "libjudge_sandbox_preload.so",
+        cwd / "run" / "libsandbox_preload.so",
+        cwd / "build" / "run" / "libjudge_sandbox_preload.so",
+        cwd / "build" / "run" / "libsandbox_preload.so",
+        // also look in parent directories (useful when running from build/)
+        cwd.parent_path() / "run" / "libjudge_sandbox_preload.so",
+        cwd.parent_path() / "run" / "libsandbox_preload.so",
+        cwd.parent_path() / "build" / "run" / "libjudge_sandbox_preload.so",
+        cwd.parent_path() / "build" / "run" / "libsandbox_preload.so",
+        std::filesystem::path("./run/libjudge_sandbox_preload.so"),
+        std::filesystem::path("./run/libsandbox_preload.so"),
+    };
+
 
 	for (const auto& candidate : candidates) {
 		if (std::filesystem::exists(candidate)) {

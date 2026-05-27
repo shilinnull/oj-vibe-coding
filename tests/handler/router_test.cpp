@@ -1,18 +1,17 @@
 #include <gtest/gtest.h>
 
-#include <chrono>
+#include <memory>
 #include <string>
-#include <thread>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <httplib.h>
+#include "../support/http_test_client.h"
 
-#include "router.h"
-#include "server.h"
+#include "net/router.h"
+#include "server/server.h"
 
 namespace {
 
@@ -43,68 +42,31 @@ int FindFreePort() {
 	return port;
 }
 
-bool WaitForServer(int port) {
-	httplib::Client client("127.0.0.1", port);
-	client.set_connection_timeout(1, 0);
-	client.set_read_timeout(1, 0);
-
-	for (int i = 0; i < 50; ++i) {
-		auto res = client.Get("/healthz");
-		if (res) {
-			return true;
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(20));
-	}
-
-	return false;
-}
-
-class ServerGuard {
- public:
-	ServerGuard(httplib::Server& server, int port)
-		: server_(server), thread_([&server, port]() { server.listen("127.0.0.1", port); }) {}
-
-	~ServerGuard() {
-		server_.stop();
-		if (thread_.joinable()) {
-			thread_.join();
-		}
-	}
-
-	ServerGuard(const ServerGuard&) = delete;
-	ServerGuard& operator=(const ServerGuard&) = delete;
-
- private:
-	httplib::Server& server_;
-	std::thread thread_;
-};
-
 }  // namespace
 
 TEST(RouterTest, MountsAllHttpMethods) {
 	oj::Router router;
 	router.Get("/router-get", [](const httplib::Request&, httplib::Response& res) {
-		res.set_content("get", "text/plain; charset=utf-8");
+		res.SetContent("get", "text/plain; charset=utf-8");
 	});
 	router.Post("/router-post", [](const httplib::Request&, httplib::Response& res) {
-		res.set_content("post", "text/plain; charset=utf-8");
+		res.SetContent("post", "text/plain; charset=utf-8");
 	});
 	router.Put("/router-put", [](const httplib::Request&, httplib::Response& res) {
-		res.set_content("put", "text/plain; charset=utf-8");
+		res.SetContent("put", "text/plain; charset=utf-8");
 	});
 	router.Delete("/router-delete", [](const httplib::Request&, httplib::Response& res) {
-		res.set_content("delete", "text/plain; charset=utf-8");
+		res.SetContent("delete", "text/plain; charset=utf-8");
 	});
-
-	httplib::Server server;
-	router.Mount(server);
 
 	const int port = FindFreePort();
 	ASSERT_GT(port, 0);
-	ServerGuard guard(server, port);
-	ASSERT_TRUE(WaitForServer(port));
+	auto server = std::make_shared<::HttpServer>(port);
+	router.Mount(*server);
+	test_support::StartDetachedServer(server, [](::HttpServer& s) { s.Listen(); });
+	ASSERT_TRUE(test_support::WaitForServer(port));
 
-	httplib::Client client("127.0.0.1", port);
+	test_support::HttpClient client("127.0.0.1", port);
 	client.set_connection_timeout(1, 0);
 	client.set_read_timeout(1, 0);
 
@@ -132,16 +94,14 @@ TEST(RouterTest, MountsAllHttpMethods) {
 TEST(HttpServerTest, RegistersHealthCheckRoute) {
 	oj::AppConfig cfg;
 	cfg.auth.jwt.secret = "test-secret";
-	oj::HttpServer server(cfg);
-	httplib::Server raw_server;
-	server.router().Mount(raw_server);
+	auto server = std::make_shared<oj::HttpServer>(cfg);
 
 	const int port = FindFreePort();
 	ASSERT_GT(port, 0);
-	ServerGuard guard(raw_server, port);
-	ASSERT_TRUE(WaitForServer(port));
+	test_support::StartDetachedServer(server, [port](oj::HttpServer& s) { s.Listen("127.0.0.1", port); });
+	ASSERT_TRUE(test_support::WaitForServer(port));
 
-	httplib::Client client("127.0.0.1", port);
+	test_support::HttpClient client("127.0.0.1", port);
 	client.set_connection_timeout(1, 0);
 	client.set_read_timeout(1, 0);
 

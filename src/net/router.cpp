@@ -18,20 +18,20 @@ void Router::Delete(const std::string& pattern, Handler handler) {
 	routes_.push_back(Route{Method::Delete, pattern, std::move(handler)});
 }
 
-void Router::Mount(httplib::Server& server) const {
-	for (const auto& r : routes_) {
-		switch (r.method) {
+void Router::Mount(::HttpServer& server) const {
+	for (const auto& route : routes_) {
+		switch (route.method) {
 			case Method::Get:
-				server.Get(r.pattern, r.handler);
+				server.Get(route.pattern, route.handler);
 				break;
 			case Method::Post:
-				server.Post(r.pattern, r.handler);
+				server.Post(route.pattern, route.handler);
 				break;
 			case Method::Put:
-				server.Put(r.pattern, r.handler);
+				server.Put(route.pattern, route.handler);
 				break;
 			case Method::Delete:
-				server.Delete(r.pattern, r.handler);
+				server.Delete(route.pattern, route.handler);
 				break;
 		}
 	}

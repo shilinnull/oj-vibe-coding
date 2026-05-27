@@ -46,11 +46,11 @@ std::optional<std::int64_t> ResolveUserId(const httplib::Request& req, const jso
 			return id;
 		}
 	}
-	if (req.has_param("user_id")) {
-		return ParseInt64(req.get_param_value("user_id"));
+	if (req.HasParam("user_id")) {
+		return ParseInt64(req.GetParam("user_id"));
 	}
-	if (req.has_header("X-User-Id")) {
-		return ParseInt64(req.get_header_value("X-User-Id"));
+	if (req.HasHeader("X-User-Id")) {
+		return ParseInt64(req.GetHeader("X-User-Id"));
 	}
 	return std::nullopt;
 }
@@ -196,12 +196,12 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& jud
 
 	router.Get(R"(/api/submissions/(\d+))", [&pool](const httplib::Request& req, httplib::Response& res) {
 		GuardJsonHandler(res, [&]() {
-			if (req.matches.size() < 2) {
+			if (req._matches.size() < 2) {
 				SendJsonError(res, 400, "invalid submission id");
 				return;
 			}
 
-			auto id = ParseInt64(req.matches[1]);
+			auto id = ParseInt64(req._matches[1]);
 			if (!id.has_value() || *id <= 0) {
 				SendJsonError(res, 400, "invalid submission id");
 				return;
@@ -220,12 +220,12 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& jud
 
 	router.Get(R"(/api/submissions)", [&pool](const httplib::Request& req, httplib::Response& res) {
 		GuardJsonHandler(res, [&]() {
-			if (!req.has_param("user_id")) {
+			if (!req.HasParam("user_id")) {
 				SendJsonError(res, 400, "user_id is required");
 				return;
 			}
 
-			auto user_id = ParseInt64(req.get_param_value("user_id"));
+			auto user_id = ParseInt64(req.GetParam("user_id"));
 			if (!user_id.has_value() || *user_id <= 0) {
 				SendJsonError(res, 400, "invalid user_id");
 				return;

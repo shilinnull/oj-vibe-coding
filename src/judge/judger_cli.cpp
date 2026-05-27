@@ -318,7 +318,7 @@ int main() {
 	}
 
 	int total_time_ms = 0;
-	int peak_memory_kb = 0; // 占位，未测量
+	int peak_memory_kb = 0;
 	int passed = 0;
 	int total = 0;
 
@@ -337,6 +337,7 @@ int main() {
 		// 使用受限运行器执行二进制
 		RunResult rr = run_program_with_limits(binary_path, in_path, out_path, run_err, time_limit_ms, memory_limit_kb);
 		total_time_ms += rr.time_ms;
+		if (rr.memory_kb > peak_memory_kb) peak_memory_kb = rr.memory_kb;
 
 		// limit actual output size to avoid producing excessively large JSON
 		const size_t MAX_ACTUAL_OUTPUT = 64 * 1024; // 64 KB per test case

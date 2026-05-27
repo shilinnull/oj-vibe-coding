@@ -91,15 +91,6 @@ HttpServer::HttpServer(const oj::AppConfig& cfg) {
 		res.SetContent("ok", "text/plain; charset=utf-8");
 	});
 
-	std::string index_html;
-	const std::string web_dir = ResolveExistingPath({"./web", "../web", "../../web"});
-	if (!web_dir.empty()) {
-		index_html = ReadTextFile((std::filesystem::path(web_dir) / "index.html").string());
-		OJ_LOG_INFO(std::string("mounted static web dir: ") + web_dir);
-	} else {
-		OJ_LOG_WARN("web directory not found; static frontend is unavailable");
-	}
-
 	// 服务启动时先初始化数据库连接池，再把认证相关路由挂进去。
 	try {
 		pool_ = std::make_unique<MySqlPool>(cfg.mysql);
@@ -124,15 +115,8 @@ void HttpServer::Listen(const char* host, int port) {
 	}};
 	muduo_server.SetDefaultHeaders(default_headers);
 
-	std::string web_dir;
+	std::string web_dir = ResolveExistingPath({"./web", "../web", "../../web"});
 	std::string index_html;
-	for (const char* candidate : {"./web", "../web", "../../web"}) {
-		std::error_code ec;
-		if (std::filesystem::exists(candidate, ec)) {
-			web_dir = std::filesystem::path(candidate).lexically_normal().string();
-			break;
-		}
-	}
 	if (!web_dir.empty()) {
 		index_html = ReadTextFile((std::filesystem::path(web_dir) / "index.html").string());
 		muduo_server.SetBaseDir(web_dir);

@@ -20,7 +20,7 @@
 #include <sys/stat.h>
 #include "muduo.hpp"
 
-#define DEFALT_TIMEOUT 10
+#define DEFAULT_TIMEOUT 10
 
 inline const std::unordered_map<int, std::string> _statu_msg = {
     {100,  "Continue"},
@@ -987,7 +987,7 @@ class HttpServer {
             return;
         }
     public:
-        HttpServer(int port, int timeout = DEFALT_TIMEOUT):_server(port) {
+        HttpServer(int port, int timeout = DEFAULT_TIMEOUT):_server(port) {
             _server.EnableInactiveRelease(timeout);
             _server.SetConnectedCallback(std::bind(&HttpServer::OnConnected, this, std::placeholders::_1));
             _server.SetMessageCallback(std::bind(&HttpServer::OnMessage, this, std::placeholders::_1, std::placeholders::_2));

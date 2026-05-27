@@ -44,16 +44,6 @@ void JudgeManager::shutdown() {
 	}
 }
 
-static std::string read_fd_all(int fd) {
-	std::ostringstream ss;
-	char buf[4096];
-	ssize_t n;
-	while ((n = read(fd, buf, sizeof(buf))) > 0) {
-		ss.write(buf, n);
-	}
-	return ss.str();
-}
-
 // Read up to max_bytes from fd. If content exceeds max_bytes, stop and set truncated=true.
 static std::string read_fd_limited(int fd, size_t max_bytes, bool &truncated) {
 	std::string out;
@@ -136,8 +126,12 @@ void JudgeManager::worker_thread() {
 
 		// 将 job.payload 序列化并写入子进程 stdin
 		std::string req = job.payload.dump();
-		ssize_t w = write(inpipe[1], req.data(), req.size());
-		(void)w;
+		ssize_t written = 0;
+		while (written < static_cast<ssize_t>(req.size())) {
+			ssize_t n = write(inpipe[1], req.data() + written, static_cast<size_t>(req.size() - written));
+			if (n <= 0) break;
+			written += n;
+		}
 		close(inpipe[1]);
 
 		// 等待子进程结束，再读取其 stdout（顺序调整可避免读取到不完整的输出导致 JSON 解析失败）
@@ -173,10 +167,6 @@ void JudgeManager::worker_thread() {
 		} else {
 			stored_result = json{{"status", "SYSTEM_ERROR"}, {"error", out.empty() ? "empty judge output" : out}}.dump();
 		}
-		if (stored_result.empty()) {
-			stored_result = json{{"status", "SYSTEM_ERROR"}, {"error", out.empty() ? "empty judge output" : out}}.dump();
-		}
-
 		try {
 			oj::SubmissionDao dao(*pool_);
 			dao.UpdateResult(job.submission_id, final_status, stored_result, time_ms, memory_kb);

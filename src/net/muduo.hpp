@@ -4,8 +4,8 @@
 #include <vector>
 #include <string>
 #include <cassert>
+#include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <functional>
 #include <unordered_map>
 #include <thread>
@@ -23,25 +23,7 @@
 #include <sys/eventfd.h>
 #include <sys/timerfd.h>
 
-#define INF 0
-#define DBG 1
-#define ERR 2
-#define LOG_LEVEL DBG
-
-#define LOG(level, ...) do{\
-        if (level < LOG_LEVEL) break;\
-        time_t t = time(NULL);\
-        struct tm *ltm = localtime(&t);\
-        char tmp[32] = {0};\
-        strftime(tmp, 31, "%H:%M:%S", ltm);\
-        fprintf(stdout, "[%p %s %s:%d] ", (void*)pthread_self(), tmp, __FILE__, __LINE__);\
-        fprintf(stdout, __VA_ARGS__);\
-        fprintf(stdout, "\n");\
-    }while(0)
-
-#define INF_LOG(...) LOG(INF, __VA_ARGS__)
-#define DBG_LOG(...) LOG(DBG, __VA_ARGS__)
-#define ERR_LOG(...) LOG(ERR, __VA_ARGS__)
+#include "utils/logger.h"
 
 #define BUFFER_DEFAULT_SIZE 1024
 class Buffer {
@@ -182,7 +164,7 @@ class Socket {
             // int socket(int domain, int type, int protocol)
             _sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
             if (_sockfd < 0) {
-                ERR_LOG("CREATE SOCKET FAILED!!");
+                OJ_LOG_ERROR("CREATE SOCKET FAILED!!");
                 return false;
             }
             return true;
@@ -197,7 +179,7 @@ class Socket {
             // int bind(int sockfd, struct sockaddr*addr, socklen_t len);
             int ret = bind(_sockfd, (struct sockaddr*)&addr, len);
             if (ret < 0) {
-                ERR_LOG("BIND ADDRESS FAILED!");
+                OJ_LOG_ERROR("BIND ADDRESS FAILED!");
                 return false;
             }
             return true;
@@ -207,7 +189,7 @@ class Socket {
             // int listen(int backlog)
             int ret = listen(_sockfd, backlog);
             if (ret < 0) {
-                ERR_LOG("SOCKET LISTEN FAILED!");
+                OJ_LOG_ERROR("SOCKET LISTEN FAILED!");
                 return false;
             }
             return true;
@@ -222,7 +204,7 @@ class Socket {
             // int connect(int sockfd, struct sockaddr*addr, socklen_t len);
             int ret = connect(_sockfd, (struct sockaddr*)&addr, len);
             if (ret < 0) {
-                ERR_LOG("CONNECT SERVER FAILED!");
+                OJ_LOG_ERROR("CONNECT SERVER FAILED!");
                 return false;
             }
             return true;
@@ -232,7 +214,7 @@ class Socket {
             // int accept(int sockfd, struct sockaddr *addr, socklen_t *len);
             int newfd = accept(_sockfd, NULL, NULL);
             if (newfd < 0) {
-                ERR_LOG("SOCKET ACCEPT FAILED!");
+                OJ_LOG_ERROR("SOCKET ACCEPT FAILED!");
                 return -1;
             }
             return newfd;
@@ -243,11 +225,19 @@ class Socket {
             ssize_t ret = recv(_sockfd, buf, len, flag);
             
             if (ret > 0) {
-                printf("进入Recv，读到%ld字节: ", ret);
-                // for (int i = 0; i < ret; i++) {
-                //     printf("%02x ", ((unsigned char*)buf)[i]);
-                // }
-                printf("\n");
+                OJ_LOG_INFO(std::string("进入Recv, 读到") + std::to_string(ret) + "字节");
+            }
+            if (ret < 0) {
+                if (errno == EAGAIN || errno == EINTR) {
+                    return 0;
+                }
+                OJ_LOG_ERROR("SOCKET RECV FAILED!!");
+                return -1;
+            }
+            else if(ret ==0)
+            {
+                OJ_LOG_INFO("对端关闭连接");
+                return -1;
             }
             if (ret < 0) {
                 //EAGAIN 当前socket的接收缓冲区中没有数据了，在非阻塞的情况下才会有这个错误
@@ -255,12 +245,12 @@ class Socket {
                 if (errno == EAGAIN || errno == EINTR) {
                     return 0;//表示这次接收没有接收到数据
                 }
-                ERR_LOG("SOCKET RECV FAILED!!");
+                OJ_LOG_ERROR("SOCKET RECV FAILED!!");
                 return -1;
             }
             else if(ret ==0)
             {
-                std::cout<<"对端关闭连接"<<std::endl;
+                OJ_LOG_INFO("对端关闭连接");
                 return -1;
             }
             return ret; //实际接收的数据长度
@@ -276,7 +266,7 @@ class Socket {
                 if (errno == EAGAIN || errno == EINTR) {
                     return 0;
                 }
-                ERR_LOG("SOCKET SEND FAILED!!");
+                OJ_LOG_ERROR("SOCKET SEND FAILED!!");
                 return -1;
             }
             return ret;//实际发送的数据长度
@@ -399,7 +389,7 @@ class Poller {
             ev.events = channel->Events();
             int ret = epoll_ctl(_epfd, op, fd, &ev);
             if (ret < 0) {
-                ERR_LOG("EPOLLCTL FAILED!");
+                OJ_LOG_ERROR("EPOLLCTL FAILED!");
             }
             return;
         }
@@ -415,7 +405,7 @@ class Poller {
         Poller() {
             _epfd = epoll_create(MAX_EPOLLEVENTS);
             if (_epfd < 0) {
-                ERR_LOG("EPOLL CREATE FAILED!!");
+                OJ_LOG_ERROR("EPOLL CREATE FAILED!!");
                 abort();//退出程序
             }
         }
@@ -445,7 +435,7 @@ class Poller {
                 if (errno == EINTR) {
                     return ;
                 }
-                ERR_LOG("EPOLL WAIT ERROR:%s\n", strerror(errno));
+                OJ_LOG_ERROR(std::string("EPOLL WAIT ERROR:") + strerror(errno));
                 abort();//退出程序
             }
             for (int i = 0; i < nfds; i++) {
@@ -502,7 +492,7 @@ class TimerWheel {
         static int CreateTimerfd() {
             int timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
             if (timerfd < 0) {
-                ERR_LOG("TIMERFD CREATE FAILED!");
+                OJ_LOG_ERROR("TIMERFD CREATE FAILED!");
                 abort();
             }
             //int timerfd_settime(int fd, int flags, struct itimerspec *new, struct itimerspec *old);
@@ -520,7 +510,7 @@ class TimerWheel {
             //read读取到的数据times就是从上一次read之后超时的次数
             int ret = read(_timerfd, &times, 8);
             if (ret < 0) {
-                ERR_LOG("READ TIMEFD FAILED!");
+                OJ_LOG_ERROR("READ TIMEFD FAILED!");
                 abort();
             }
             return times;
@@ -616,7 +606,7 @@ class EventLoop {
         static int CreateEventFd() {
             int efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
             if (efd < 0) {
-                ERR_LOG("CREATE EVENTFD FAILED!!");
+                OJ_LOG_ERROR("CREATE EVENTFD FAILED!!");
                 abort();//让程序异常退出
             }
             return efd;
@@ -629,7 +619,7 @@ class EventLoop {
                 if (errno == EINTR || errno == EAGAIN) {
                     return;
                 }
-                ERR_LOG("READ EVENTFD FAILED!");
+                OJ_LOG_ERROR("READ EVENTFD FAILED!");
                 abort();
             }
             return ;
@@ -641,7 +631,7 @@ class EventLoop {
                 if (errno == EINTR) {
                     return;
                 }
-                ERR_LOG("READ EVENTFD FAILED!");
+                OJ_LOG_ERROR("READ EVENTFD FAILED!");
                 abort();
             }
             return ;
@@ -1029,7 +1019,11 @@ class Connection : public std::enable_shared_from_this<Connection> {
             _channel.SetWriteCallback(std::bind(&Connection::HandleWrite, this));
             _channel.SetErrorCallback(std::bind(&Connection::HandleError, this));
         }
-        ~Connection() { DBG_LOG("RELEASE CONNECTION:%p", (void*)this); }
+        ~Connection() {
+            char _buf[64];
+            snprintf(_buf, sizeof(_buf), "RELEASE CONNECTION:%p", (void*)this);
+            OJ_LOG_DEBUG(std::string(_buf));
+        }
         //获取管理的文件描述符
         int Fd() { return _sockfd; }
         //获取连接ID
@@ -1205,7 +1199,7 @@ inline void TimerWheel::TimerCancel(uint64_t id) {
 class NetWork {
     public:
         NetWork() {
-            DBG_LOG("SIGPIPE INIT");
+            OJ_LOG_DEBUG("SIGPIPE INIT");
             signal(SIGPIPE, SIG_IGN);
         }
 };

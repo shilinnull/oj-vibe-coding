@@ -52,7 +52,7 @@
           │ HTTP (REST API)          │ 静态文件
           ▼                          ▼
 ┌─────────────────────────────────────────────────────┐
-│              cpp-httplib Web Server                   │
+│                  http Web Server                   │
 │  ┌──────────┐  ┌──────────────┐  ┌────────────────┐  │
 │  │ Router   │  │ AuthMiddleware│  │ FileServer     │  │
 │  │ (URL路由)│  │ (Session鉴权) │  │ (前端静态文件)  │  │
@@ -153,7 +153,7 @@ oj-vibe-coding/
 ├── src/
 │   ├── main.cpp                 # 入口
 │   ├── server/
-│   │   ├── server.cpp/h         # HTTP Server 封装（cpp-httplib）
+│   │   ├── server.cpp/h         # HTTP Server 封装（cpp-http）
 │   ├── net/
 │   │   ├── router.cpp/h         # URL 路由注册
 │   │   ├── http.hpp             # HTTP 工具函数
@@ -502,7 +502,7 @@ CREATE TABLE submissions (
 ## 4. TODO 清单（按优先级排序）
 
 ### P0 — 基础设施
-- [x] **P0-1** 搭建 CMake 项目骨架，引入 cpp-httplib、nlohmann/json、MySQL connector
+- [x] **P0-1** 搭建 CMake 项目骨架，引入 cpp-http、nlohmann/json、MySQL connector
 - [x] **P0-2** 实现配置封装模块 `config.cpp/h`
 - [x] **P0-3** 实现日志封装模块 `logger.cpp/h`
 - [x] **P0-4** 实现 MySQL 连接池 `mysql_pool.cpp/h`
@@ -551,7 +551,7 @@ CREATE TABLE submissions (
 - [x] **P6-1** 完善错误页面与全局异常处理
 - [x] **P6-2** 判题超时、系统异常等边缘案例完善
 - [x] **P6-3** 性能优化：数据库索引、连接复用
-- [x] **P6-4** cpp-httplib 静态文件 serving 配置
+- [x] **P6-4** cpp-http 静态文件 serving 配置
 - [x] **P6-5** Handler 抽象层 Review
 
 ---

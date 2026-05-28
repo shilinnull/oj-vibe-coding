@@ -46,16 +46,16 @@ int FindFreePort() {
 
 TEST(RouterTest, MountsAllHttpMethods) {
 	oj::Router router;
-	router.Get("/router-get", [](const httplib::Request&, httplib::Response& res) {
+	router.Get("/router-get", [](const http::Request&, http::Response& res) {
 		res.SetContent("get", "text/plain; charset=utf-8");
 	});
-	router.Post("/router-post", [](const httplib::Request&, httplib::Response& res) {
+	router.Post("/router-post", [](const http::Request&, http::Response& res) {
 		res.SetContent("post", "text/plain; charset=utf-8");
 	});
-	router.Put("/router-put", [](const httplib::Request&, httplib::Response& res) {
+	router.Put("/router-put", [](const http::Request&, http::Response& res) {
 		res.SetContent("put", "text/plain; charset=utf-8");
 	});
-	router.Delete("/router-delete", [](const httplib::Request&, httplib::Response& res) {
+	router.Delete("/router-delete", [](const http::Request&, http::Response& res) {
 		res.SetContent("delete", "text/plain; charset=utf-8");
 	});
 

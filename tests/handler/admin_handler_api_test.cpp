@@ -298,7 +298,7 @@ TEST_F(AdminApiTest, AdminLanguageAndProblemLifecycle) {
         {"compile_cmd", "compile"},
         {"run_cmd", "run"}
     };
-    httplib::Headers hdrs = {{"Authorization", std::string("Bearer ") + jwt}};
+    http::Headers hdrs = {{"Authorization", std::string("Bearer ") + jwt}};
     auto res = client.Post("/api/admin/languages", hdrs, MakeJsonBody(lang_body), "application/json");
     ASSERT_TRUE(res);
     EXPECT_EQ(res->status, 201);

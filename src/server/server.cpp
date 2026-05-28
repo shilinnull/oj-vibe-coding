@@ -87,7 +87,7 @@ std::string ReadTextFile(const std::string& path) {
 
 HttpServer::HttpServer(const oj::AppConfig& cfg) {
 	// 健康检查接口，给部署环境和容器探活用。
-	router_.Get("/healthz", [](const httplib::Request&, httplib::Response& res) {
+	router_.Get("/healthz", [](const http::Request&, http::Response& res) {
 		res.SetContent("ok", "text/plain; charset=utf-8");
 	});
 

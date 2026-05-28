@@ -51,7 +51,8 @@ struct JudgeConfig {
 struct LoggingConfig {
 	LogLevel level{LogLevel::Info};
 	bool to_stdout{true};
-	std::string file{};
+	std::string file{};  // 日志目录路径（非空时启用文件日志）
+	std::size_t max_file_size{10 * 1024 * 1024};  // 单文件上限，默认 10MB
 };
 
 struct AppConfig {

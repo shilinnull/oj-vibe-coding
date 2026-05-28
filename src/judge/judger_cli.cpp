@@ -17,6 +17,7 @@
 #include <sstream>
 #include <chrono>
 #include <signal.h>
+#include "utils/logger.h"
 
 using json = nlohmann::json;
 
@@ -230,10 +231,16 @@ static std::string resolve_sandbox_preload_path() {
 }
 
 int main() {
+	{
+		oj::LoggingConfig log_cfg;
+		log_cfg.to_stdout = true;
+		oj::Logger::Instance().Init(log_cfg);
+	}
+
 	// 读取 stdin 的 JSON 参数
 	std::string input = read_stdin_all();
 	if (input.empty()) {
-		std::cerr << "judger_cli: 没有从 stdin 读取到输入 JSON\n";
+		OJ_LOG_ERROR("judger_cli: 没有从 stdin 读取到输入 JSON");
 		return 1;
 	}
 

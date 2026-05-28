@@ -35,7 +35,7 @@ using json = nlohmann::json;
 
 namespace {
 
-void SendJson(httplib::Response& res, int status, const json& body) {
+void SendJson(http::Response& res, int status, const json& body) {
 	res._statu = status;
 	res.SetContent(body.dump(), "application/json");
 }
@@ -55,7 +55,7 @@ int ClampInt(int value, int min_value, int max_value) {
 	return std::max(min_value, std::min(value, max_value));
 }
 
-int ParseIntParam(const httplib::Request& req, const char* key, int default_value) {
+int ParseIntParam(const http::Request& req, const char* key, int default_value) {
 	if (!req.HasParam(key)) return default_value;
 	try {
 		return std::stoi(req.GetParam(key));
@@ -64,8 +64,8 @@ int ParseIntParam(const httplib::Request& req, const char* key, int default_valu
 	}
 }
 
-std::optional<AuthInfo> RequireAdmin(const httplib::Request& req,
-											httplib::Response& res,
+std::optional<AuthInfo> RequireAdmin(const http::Request& req,
+											http::Response& res,
 											const std::string& jwt_secret) {
 	auto info = AuthenticateRequest(jwt_secret, req);
 	if (!info.has_value()) {
@@ -79,7 +79,7 @@ std::optional<AuthInfo> RequireAdmin(const httplib::Request& req,
 	return info;
 }
 
-std::optional<json> ParseBody(const httplib::Request& req, httplib::Response& res) {
+std::optional<json> ParseBody(const http::Request& req, http::Response& res) {
 	std::string error;
 	auto body = TryParseJson(req._body, &error);
 	if (!body.has_value()) {
@@ -200,7 +200,7 @@ std::vector<ZipParsedCase> ParseTestcasesFromDir(const std::filesystem::path& di
 
 void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPool& pool) {
 	// Problems CRUD
-	router.Post(R"(/api/admin/problems)", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Post(R"(/api/admin/problems)", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -231,7 +231,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		}
 	});
 
-	router.Get(R"(/api/admin/problems/(\d+))", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Get(R"(/api/admin/problems/(\d+))", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -259,7 +259,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		}
 	});
 
-	router.Put(R"(/api/admin/problems/(\d+))", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Put(R"(/api/admin/problems/(\d+))", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -301,7 +301,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		}
 	});
 
-	router.Delete(R"(/api/admin/problems/(\d+))", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Delete(R"(/api/admin/problems/(\d+))", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -326,7 +326,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 	});
 
 	// Testcases add
-	router.Post(R"(/api/admin/problems/(\d+)/testcases)", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Post(R"(/api/admin/problems/(\d+)/testcases)", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -369,7 +369,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 
 	// Testcases zip upload (replace all non-sample cases)
 	router.Post(R"(/api/admin/problems/(\d+)/testcases/upload)",
-						 [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+						 [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -452,7 +452,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 	});
 
 	// Languages CRUD
-	router.Get(R"(/api/admin/languages)", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Get(R"(/api/admin/languages)", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -464,7 +464,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		}
 	});
 
-	router.Post(R"(/api/admin/languages)", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Post(R"(/api/admin/languages)", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -492,7 +492,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 		}
 	});
 
-	router.Put(R"(/api/admin/languages/(\d+))", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Put(R"(/api/admin/languages/(\d+))", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -535,7 +535,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 	});
 
 	// Admin submissions list
-	router.Get(R"(/api/admin/submissions)", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Get(R"(/api/admin/submissions)", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;
@@ -554,7 +554,7 @@ void RegisterAdminRoutes(Router& router, const std::string& jwt_secret, MySqlPoo
 	});
 
 	// User status management
-	router.Put(R"(/api/admin/users/(\d+)/status)", [&pool, &jwt_secret](const httplib::Request& req, httplib::Response& res) {
+	router.Put(R"(/api/admin/users/(\d+)/status)", [&pool, &jwt_secret](const http::Request& req, http::Response& res) {
 		try {
 			auto admin = RequireAdmin(req, res, jwt_secret);
 			if (!admin.has_value()) return;

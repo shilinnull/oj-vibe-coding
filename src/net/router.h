@@ -13,7 +13,7 @@ namespace oj {
 // 轻量级路由表：先把路由和回调保存起来，最后统一挂到 HTTP server 上。
 class Router {
  public:
-	using Handler = std::function<void(const httplib::Request&, httplib::Response&)>;
+	using Handler = std::function<void(const http::Request&, http::Response&)>;
 
 	// 下面四个接口只负责登记路由，不会立刻处理请求。
 	void Get(const std::string& pattern, Handler handler);

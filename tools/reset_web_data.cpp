@@ -1,8 +1,8 @@
-#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 #include <chrono>
+#include "utils/logger.h"
 
 #include <mysql/mysql.h>
 #include <fstream>
@@ -34,8 +34,8 @@ static std::string ResolveConfigPath() {
 
 static void ExecOrDie(MYSQL* conn, const std::string& sql) {
     if (mysql_real_query(conn, sql.c_str(), (unsigned long)sql.size())) {
-        std::cerr << "SQL error: " << mysql_error(conn) << "\n";
-        std::cerr << "While executing: " << sql << "\n";
+        OJ_LOG_ERROR(std::string("SQL error: ") + mysql_error(conn));
+        OJ_LOG_ERROR("While executing: " + sql);
         std::exit(1);
     }
 }
@@ -90,6 +90,7 @@ static long EnsureAdminAccount(MYSQL* conn) {
 int main() {
     try {
         auto cfg = Config::LoadFromFile(ResolveConfigPath());
+        Logger::Instance().Init(cfg.logging);
         cfg.mysql.user = kResetDbUser;
         cfg.mysql.password = kResetDbPassword;
         cfg.mysql.host = kResetDbHost;
@@ -99,30 +100,30 @@ int main() {
         auto pconn = pool.Acquire();
         MYSQL* conn = pconn.get();
         if (!conn) {
-            std::cerr << "failed to acquire mysql connection" << std::endl;
+            OJ_LOG_ERROR("failed to acquire mysql connection");
             return 1;
         }
 
-        std::cout << "Disabling foreign key checks...\n";
+        OJ_LOG_INFO("Disabling foreign key checks...");
         ExecOrDie(conn, "SET FOREIGN_KEY_CHECKS=0");
 
         // Truncate tables used by frontend tests
         std::vector<std::string> tables = {"submissions", "test_cases", "problems", "languages", "users"};
         for (const auto& t : tables) {
             std::string q = "TRUNCATE TABLE `" + t + "`";
-            std::cout << "Truncating " << t << "\n";
+            OJ_LOG_INFO("Truncating " + t);
             ExecOrDie(conn, q);
         }
 
         // Recreate basic users: admin and several student users with timestamp suffix.
-        std::cout << "Inserting users...\n";
+        OJ_LOG_INFO("Inserting users...");
         std::string user_pass = GeneratePasswordHash("pass1234");
         std::string ts_suffix = CurrentTimestampSuffix();
         std::vector<std::string> seeded_users;
         const int kStudentUserCount = 6;
 
         long admin_id = EnsureAdminAccount(conn);
-        std::cout << "Admin account ready: username=" << kAdminUsername << ", id=" << admin_id << "\n";
+        OJ_LOG_INFO(std::string("Admin account ready: username=") + kAdminUsername + ", id=" + std::to_string(admin_id));
         for (int i = 1; i <= kStudentUserCount; ++i) {
             std::string username = "ui_user_" + ts_suffix + "_" + std::to_string(i);
             std::string email = "ui_" + ts_suffix + "_" + std::to_string(i) + "@example.com";
@@ -132,18 +133,18 @@ int main() {
         }
 
         // Insert languages
-        std::cout << "Inserting languages...\n";
+        OJ_LOG_INFO("Inserting languages...");
         ExecOrDie(conn, "INSERT INTO languages (name, extension, compile_cmd, run_cmd, enabled) VALUES ('C++17', 'cpp', 'g++ -O2 -std=c++17 {source} -o {output}', '{binary}', 1)");
         ExecOrDie(conn, "INSERT INTO languages (name, extension, compile_cmd, run_cmd, enabled) VALUES ('C11', 'c', 'gcc -O2 -std=c11 {source} -o {output}', '{binary}', 1)");
 
         // Find a user id to use as created_by (admin)
         if (!admin_id) {
-            std::cerr << "cannot find admin id" << std::endl;
+            OJ_LOG_ERROR("cannot find admin id");
             return 1;
         }
 
         // Insert problems with stable ids
-        std::cout << "Inserting problems...\n";
+        OJ_LOG_INFO("Inserting problems...");
         std::vector<std::tuple<long, std::string, std::string, std::string, int, int, std::string>> problems = {
             {900001, "A + B Problem", "给定两个整数，输出它们的和。\n输入: 一行两个整数。", "easy", 1000, 262144, "published"},
             {900002, "Array Rotate", "旋转数组题目描述。", "medium", 1500, 262144, "published"},
@@ -158,17 +159,17 @@ int main() {
         }
 
         // Insert sample test cases
-        std::cout << "Inserting test cases...\n";
+        OJ_LOG_INFO("Inserting test cases...");
         ExecOrDie(conn, "INSERT INTO test_cases (problem_id, is_sample, input, output, sort_order) VALUES (900001, 1, '1 2\n', '3\n', 1)");
         ExecOrDie(conn, "INSERT INTO test_cases (problem_id, is_sample, input, output, sort_order) VALUES (900001, 1, '-5 10\n', '5\n', 2)");
         ExecOrDie(conn, "INSERT INTO test_cases (problem_id, is_sample, input, output, sort_order) VALUES (900003, 1, '123 456\n', '56088\n', 1)");
 
         // Prepare some sample submissions (only a few statuses)
-        std::cout << "Inserting sample submissions...\n";
+        OJ_LOG_INFO("Inserting sample submissions...");
 
         // find one seeded ui user id
         if (seeded_users.empty()) {
-            std::cerr << "no seeded users found" << std::endl;
+            OJ_LOG_ERROR("no seeded users found");
             return 1;
         }
         long ui_id = QueryUserIdByUsername(conn, seeded_users.front());
@@ -212,10 +213,10 @@ int main() {
         // Re-enable foreign key checks
         ExecOrDie(conn, "SET FOREIGN_KEY_CHECKS=1");
 
-        std::cout << "Database reset and seed complete." << std::endl;
+        OJ_LOG_INFO("Database reset and seed complete.");
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "fatal: " << e.what() << std::endl;
+        OJ_LOG_ERROR(std::string("fatal: ") + e.what());
         return 1;
     }
 }

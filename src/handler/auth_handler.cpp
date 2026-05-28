@@ -14,7 +14,7 @@ namespace handler {
 
 using json = nlohmann::json;
 
-static void RegisterHandler(const httplib::Request& req, httplib::Response& res, MySqlPool& pool, const std::string& jwt_secret) {
+static void RegisterHandler(const http::Request& req, http::Response& res, MySqlPool& pool, const std::string& jwt_secret) {
     try {
         // 注册接口只接受用户名、密码和可选邮箱，其他字段由服务端补齐。
         auto body = json::parse(req._body);
@@ -46,7 +46,7 @@ static void RegisterHandler(const httplib::Request& req, httplib::Response& res,
     }
 }
 
-static void LoginHandler(const httplib::Request& req, httplib::Response& res, MySqlPool& pool, const std::string& jwt_secret) {
+static void LoginHandler(const http::Request& req, http::Response& res, MySqlPool& pool, const std::string& jwt_secret) {
     try {
         // 登录先查用户，再比对密码哈希，避免明文密码入库和传递。
         auto body = json::parse(req._body);
@@ -80,20 +80,20 @@ static void LoginHandler(const httplib::Request& req, httplib::Response& res, My
     }
 }
 
-static void LogoutHandler(const httplib::Request& /*req*/, httplib::Response& res) {
+static void LogoutHandler(const http::Request& /*req*/, http::Response& res) {
     // JWT 是无状态的：如果不做 token 黑名单，退出本质上只是前端删 token。
     res.SetContent(R"({"ok":true})", "application/json");
 }
 
 void RegisterAuthRoutes(Router& router, const std::string& jwt_secret, MySqlPool& pool) {
     // 认证相关接口统一放在 /api/auth 下，方便前端和网关记忆。
-    router.Post("/api/auth/register", [&](const httplib::Request& req, httplib::Response& res) {
+    router.Post("/api/auth/register", [&](const http::Request& req, http::Response& res) {
         RegisterHandler(req, res, pool, jwt_secret);
     });
-    router.Post("/api/auth/login", [&](const httplib::Request& req, httplib::Response& res) {
+    router.Post("/api/auth/login", [&](const http::Request& req, http::Response& res) {
         LoginHandler(req, res, pool, jwt_secret);
     });
-    router.Post("/api/auth/logout", [&](const httplib::Request& req, httplib::Response& res) {
+    router.Post("/api/auth/logout", [&](const http::Request& req, http::Response& res) {
         LogoutHandler(req, res);
     });
 }

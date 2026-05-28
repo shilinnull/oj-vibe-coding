@@ -34,7 +34,7 @@ TEST(AuthTest, AuthenticateRequestReadsBearerToken) {
 	const std::string secret = "test-secret";
 	const std::string token = oj::GenerateJwt(secret, 7, "bob", "admin", 3600);
 
-	httplib::Request req;
+	http::Request req;
 	req._headers.emplace("Authorization", "Bearer " + token);
 
 	auto info = oj::AuthenticateRequest(secret, req);

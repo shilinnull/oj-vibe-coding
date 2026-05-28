@@ -3,6 +3,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -187,7 +188,7 @@ class Util {
         static bool ReadFile(const std::string &filename, std::string *buf) {
             std::ifstream ifs(filename, std::ios::binary);
             if (ifs.is_open() == false) {
-                printf("OPEN %s FILE FAILED!!", filename.c_str());
+                OJ_LOG_ERROR(std::string("OPEN ") + filename + " FILE FAILED!!");
                 return false;
             }
             size_t fsize = 0;
@@ -197,7 +198,7 @@ class Util {
             buf->resize(fsize); //开辟文件大小的空间
             ifs.read(&(*buf)[0], fsize);
             if (ifs.good() == false) {
-                printf("READ %s FILE FAILED!!", filename.c_str());
+                OJ_LOG_ERROR(std::string("READ ") + filename + " FILE FAILED!!");
                 ifs.close();
                 return false;
             }
@@ -208,12 +209,12 @@ class Util {
         static bool WriteFile(const std::string &filename, const std::string &buf) {
             std::ofstream ofs(filename, std::ios::binary | std::ios::trunc);
             if (ofs.is_open() == false) {
-                printf("OPEN %s FILE FAILED!!", filename.c_str());
+                OJ_LOG_ERROR(std::string("OPEN ") + filename + " FILE FAILED!!");
                 return false;
             }
             ofs.write(buf.c_str(), buf.size());
             if (ofs.good() == false) {
-                ERR_LOG("WRITE %s FILE FAILED!", filename.c_str());
+                OJ_LOG_ERROR(std::string("WRITE ") + filename + " FILE FAILED!");
                 ofs.close();    
                 return false;
             }
@@ -499,12 +500,12 @@ class HttpResponse {
         }
 };
 
-namespace httplib {
+namespace http {
 using Request = ::HttpRequest;
 using Response = ::HttpResponse;
 using Headers = std::unordered_map<std::string, std::string>;
 using File = ::HttpRequest::File;
-}  // namespace httplib
+}  // namespace http
 
 typedef enum {
     RECV_HTTP_ERROR,
@@ -627,11 +628,6 @@ class HttpContext {
                 _resp_statu = 400;//BAD REQUEST
                 return false;
             }
-            //0 : GET /bitejiuyeke/login?user=xiaoming&pass=123123 HTTP/1.1
-            //1 : GET
-            //2 : /bitejiuyeke/login
-            //3 : user=xiaoming&pass=123123
-            //4 : HTTP/1.1
             //请求方法的获取
             _request._method = matches[1];
             std::transform(_request._method.begin(), _request._method.end(), _request._method.begin(), ::toupper);
@@ -937,7 +933,9 @@ class HttpServer {
         //设置上下文
         void OnConnected(const PtrConnection &conn) {
             conn->SetContext(HttpContext());
-            DBG_LOG("NEW CONNECTION %p", (void*)conn.get());
+            char _buf[64];
+            snprintf(_buf, sizeof(_buf), "NEW CONNECTION %p", (void*)conn.get());
+            OJ_LOG_DEBUG(std::string(_buf));
         }
         //缓冲区数据解析+处理
         void OnMessage(const PtrConnection &conn, Buffer *buffer) {

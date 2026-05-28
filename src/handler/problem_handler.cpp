@@ -29,7 +29,7 @@ std::string NormalizeStatusFilter(std::string status) {
 }  // namespace
 
 void RegisterProblemRoutes(Router& router, MySqlPool& pool) {
-	router.Get(R"(/api/problems)", [&pool](const httplib::Request& req, httplib::Response& res) {
+	router.Get(R"(/api/problems)", [&pool](const http::Request& req, http::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			const int limit = ClampInt(ParseIntParam(req, "limit", 20), 1, 100);
 			const int offset = std::max(0, ParseIntParam(req, "offset", 0));
@@ -47,7 +47,7 @@ void RegisterProblemRoutes(Router& router, MySqlPool& pool) {
 		});
 	});
 
-	router.Get(R"(/api/problems/(\d+))", [&pool](const httplib::Request& req, httplib::Response& res) {
+	router.Get(R"(/api/problems/(\d+))", [&pool](const http::Request& req, http::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			if (req._matches.size() < 2) {
 				SendJsonError(res, 400, "invalid problem id");

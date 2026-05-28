@@ -17,12 +17,12 @@ namespace handler {
 
 using json = nlohmann::json;
 
-inline void SendJson(httplib::Response& res, int status, const json& body) {
+inline void SendJson(http::Response& res, int status, const json& body) {
 	res._statu = status;
 	res.SetContent(body.dump(), "application/json");
 }
 
-inline void SendJsonError(httplib::Response& res,
+inline void SendJsonError(http::Response& res,
 												int status,
 												const std::string& error,
 												const std::string& message = std::string()) {
@@ -50,7 +50,7 @@ inline int ClampInt(int value, int min_value, int max_value) {
 	return std::max(min_value, std::min(value, max_value));
 }
 
-inline int ParseIntParam(const httplib::Request& req, const char* key, int default_value) {
+inline int ParseIntParam(const http::Request& req, const char* key, int default_value) {
 	if (!req.HasParam(key)) {
 		return default_value;
 	}
@@ -61,8 +61,8 @@ inline int ParseIntParam(const httplib::Request& req, const char* key, int defau
 	}
 }
 
-inline std::optional<json> ParseJsonBody(const httplib::Request& req,
-															httplib::Response& res) {
+inline std::optional<json> ParseJsonBody(const http::Request& req,
+															http::Response& res) {
 	std::string parse_error;
 	auto body = TryParseJson(req._body, &parse_error);
 	if (!body.has_value()) {
@@ -73,7 +73,7 @@ inline std::optional<json> ParseJsonBody(const httplib::Request& req,
 }
 
 template <typename Func>
-inline void GuardJsonHandler(httplib::Response& res, Func&& fn) {
+inline void GuardJsonHandler(http::Response& res, Func&& fn) {
 	try {
 		fn();
 	} catch (const std::exception& e) {

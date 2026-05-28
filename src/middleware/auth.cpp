@@ -62,7 +62,7 @@ std::optional<AuthInfo> VerifyJwt(const std::string& secret, const std::string& 
     }
 }
 
-std::optional<AuthInfo> AuthenticateRequest(const std::string& secret, const httplib::Request& req) {
+std::optional<AuthInfo> AuthenticateRequest(const std::string& secret, const http::Request& req) {
     // 约定用 Bearer token 传递登录态。
     auto it = req._headers.find("Authorization");
     if (it == req._headers.end()) return std::nullopt;

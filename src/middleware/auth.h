@@ -20,6 +20,6 @@ std::string GenerateJwt(const std::string& secret, long user_id, const std::stri
 std::optional<AuthInfo> VerifyJwt(const std::string& secret, const std::string& token);
 
 // 从 Authorization: Bearer xxx 中取 token 并校验。
-std::optional<AuthInfo> AuthenticateRequest(const std::string& secret, const httplib::Request& req);
+std::optional<AuthInfo> AuthenticateRequest(const std::string& secret, const http::Request& req);
 
 }  // namespace oj

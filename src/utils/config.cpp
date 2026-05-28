@@ -143,6 +143,9 @@ AppConfig Config::LoadFromFile(const std::string& path) {
 		}
 		cfg.logging.to_stdout = ScalarOrDefault<bool>(logging["to_stdout"], cfg.logging.to_stdout);
 		cfg.logging.file = ScalarStringOrDefaultExpanded(logging["file"], cfg.logging.file);
+		// max_file_size in MB (default 10 MB)
+		auto mfs = ScalarOrDefault<std::size_t>(logging["max_file_size"], 10);
+		cfg.logging.max_file_size = mfs * 1024 * 1024;
 	}
 
 	return cfg;

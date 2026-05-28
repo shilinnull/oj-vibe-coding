@@ -8,11 +8,12 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <iostream>
+#include <cstdio>
 #include <sstream>
 #include <cstring>
 #include <filesystem>
 #include <vector>
+#include "utils/logger.h"
 
 JudgeManager::JudgeManager(oj::MySqlPool& pool, int max_concurrency)
 	: pool_(&pool), max_concurrency_(max_concurrency), running_(true) {
@@ -95,13 +96,13 @@ void JudgeManager::worker_thread() {
 		int inpipe[2];
 		int outpipe[2];
 		if (pipe(inpipe) != 0 || pipe(outpipe) != 0) {
-			std::cerr << "JudgeManager: 创建管道失败\n";
+			OJ_LOG_ERROR("JudgeManager: 创建管道失败");
 			continue;
 		}
 
 		pid_t pid = fork();
 		if (pid < 0) {
-			std::cerr << "JudgeManager: fork 失败\n";
+			OJ_LOG_ERROR("JudgeManager: fork 失败");
 			close(inpipe[0]); close(inpipe[1]); close(outpipe[0]); close(outpipe[1]);
 			continue;
 		}
@@ -117,7 +118,7 @@ void JudgeManager::worker_thread() {
 			const std::string exe = resolve_judger_cli_path();
 			execlp(exe.c_str(), exe.c_str(), (char*)NULL);
 			// 若 exec 失败，退出
-			std::cerr << "JudgeManager: exec judger_cli 失败: " << strerror(errno) << "\n";
+			dprintf(STDERR_FILENO, "JudgeManager: exec judger_cli 失败: %s\n", strerror(errno));
 			_exit(127);
 		}
 
@@ -171,19 +172,13 @@ void JudgeManager::worker_thread() {
 			oj::SubmissionDao dao(*pool_);
 			dao.UpdateResult(job.submission_id, final_status, stored_result, time_ms, memory_kb);
 		} catch (const std::exception& e) {
-			std::cerr << "JudgeManager: 回写 submission_id=" << job.submission_id
-					  << " 失败: " << e.what() << "\n";
+			OJ_LOG_ERROR("JudgeManager: 回写 submission_id=" + std::to_string(job.submission_id) + " 失败: " + e.what());
 		}
 
 		// Print concise log only (avoid dumping full judge output which may be huge).
 		size_t preview_len = 2048;
 		std::string preview = out.size() > preview_len ? out.substr(0, preview_len) + "\n... (preview truncated)" : out;
-		std::cerr << "JudgeManager: submission_id=" << job.submission_id
-			  << " finished, status=" << final_status
-			  << ", time_ms=" << time_ms
-			  << ", memory_kb=" << memory_kb
-			  << ", output_preview_len=" << preview.size()
-			  << "\n";
+		OJ_LOG_INFO("JudgeManager: submission_id=" + std::to_string(job.submission_id) + " finished, status=" + final_status + ", time_ms=" + std::to_string(time_ms) + ", memory_kb=" + std::to_string(memory_kb) + ", output_preview_len=" + std::to_string(preview.size()));
 	}
 }
 

@@ -39,7 +39,7 @@ std::string Lower(std::string s) {
 	return s;
 }
 
-std::optional<std::int64_t> ResolveUserId(const httplib::Request& req, const json& body) {
+std::optional<std::int64_t> ResolveUserId(const http::Request& req, const json& body) {
 	if (body.contains("user_id")) {
 		auto id = ParseJsonInt64(body.at("user_id"));
 		if (id.has_value()) {
@@ -98,14 +98,14 @@ json BuildJudgePayload(const Submission& submission,
 }  // namespace
 
 void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& judge_manager) {
-	router.Get(R"(/api/languages)", [&pool](const httplib::Request& /*req*/, httplib::Response& res) {
+	router.Get(R"(/api/languages)", [&pool](const http::Request& /*req*/, http::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			LanguageDao dao(pool);
 			SendJson(res, 200, json{{"items", dao.ListAll(true)}});
 		});
 	});
 
-	router.Post(R"(/api/submissions)", [&pool, &judge_manager](const httplib::Request& req, httplib::Response& res) {
+	router.Post(R"(/api/submissions)", [&pool, &judge_manager](const http::Request& req, http::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			auto body_json = ParseJsonBody(req, res);
 			if (!body_json.has_value()) {
@@ -194,7 +194,7 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& jud
 		});
 	});
 
-	router.Get(R"(/api/submissions/(\d+))", [&pool](const httplib::Request& req, httplib::Response& res) {
+	router.Get(R"(/api/submissions/(\d+))", [&pool](const http::Request& req, http::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			if (req._matches.size() < 2) {
 				SendJsonError(res, 400, "invalid submission id");
@@ -218,7 +218,7 @@ void RegisterSubmissionRoutes(Router& router, MySqlPool& pool, JudgeManager& jud
 		});
 	});
 
-	router.Get(R"(/api/submissions)", [&pool](const httplib::Request& req, httplib::Response& res) {
+	router.Get(R"(/api/submissions)", [&pool](const http::Request& req, http::Response& res) {
 		GuardJsonHandler(res, [&]() {
 			if (!req.HasParam("user_id")) {
 				SendJsonError(res, 400, "user_id is required");

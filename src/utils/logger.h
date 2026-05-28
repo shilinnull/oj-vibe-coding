@@ -1,7 +1,7 @@
 #pragma once
 
+#include <cstdio>
 #include <mutex>
-#include <optional>
 #include <string>
 
 #include "utils/config.h"
@@ -26,11 +26,20 @@ class Logger {
 	static std::string FormatTimestamp();
 	static const char* LevelString(LogLevel level);
 
+	void CreateNewLogFile();
+	void RotateLogFile();
+	static void GetTimestampParts(std::string& date_str, std::string& full_ts_str);
+
 	mutable std::mutex mu_{};
 	LoggingConfig cfg_{};
 	bool initialized_{false};
-	std::optional<std::string> file_path_{};
-	void* file_handle_{nullptr};
+
+	// 文件日志相关
+	std::string log_dir_{};            // 日志目录路径
+	std::string current_log_path_{};   // 当前日志文件的完整路径
+	std::string current_date_str_{};   // 当前文件的日期部分，如 "2026_5_28"
+	std::size_t current_file_size_{0}; // 当前文件已写入字节数
+	FILE* file_handle_{nullptr};
 };
 
 }  // namespace oj

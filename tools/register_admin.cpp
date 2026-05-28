@@ -2,8 +2,8 @@
 #include <cstring>
 #include <cstdlib>
 #include <algorithm>
-#include <iostream>
 #include <stdexcept>
+#include "utils/logger.h"
 #include <string>
 
 #include <mysql/mysql.h>
@@ -309,13 +309,13 @@ int main(int argc, char* argv[]) {
 			} else if (arg == "--password" && i + 1 < argc) {
 				password = argv[++i];
 			} else {
-				std::cerr << "Usage: " << argv[0]
-				          << " [--config path] [--username name] [--password value]\n";
+				OJ_LOG_ERROR(std::string("Usage: ") + argv[0] + " [--config path] [--username name] [--password value]");
 				return 2;
 			}
 		}
 
 		oj::AppConfig cfg = oj::Config::LoadFromFile(config_path);
+		oj::Logger::Instance().Init(cfg.logging);
 		MysqlConnection conn(cfg.mysql);
 
 		const std::string password_hash = oj::GeneratePasswordHash(password);
@@ -324,20 +324,20 @@ int main(int argc, char* argv[]) {
 		const std::int64_t existing_id = FindUserIdByUsername(conn.conn, username);
 		if (existing_id >= 0) {
 			UpdateAdminUser(conn.conn, existing_id, username, password_hash);
-			std::cout << "Updated existing admin account: " << username << " (id=" << existing_id << ")\n";
+			OJ_LOG_INFO("Updated existing admin account: " + username + " (id=" + std::to_string(existing_id) + ")");
 		} else {
 			const std::int64_t new_id = InsertAdminUser(conn.conn, username, password_hash);
 			CommitTransaction(conn.conn);
 
-			std::cout << "Admin account ready: username=" << username << ", id=" << new_id << '\n';
+			OJ_LOG_INFO("Admin account ready: username=" + username + ", id=" + std::to_string(new_id));
 			return 0;
 		}
 		CommitTransaction(conn.conn);
 
-		std::cout << "Admin account ready: username=" << username << ", id=" << existing_id << '\n';
+		OJ_LOG_INFO("Admin account ready: username=" + username + ", id=" + std::to_string(existing_id));
 		return 0;
 	} catch (const std::exception& ex) {
-		std::cerr << "register_admin failed: " << ex.what() << '\n';
+		OJ_LOG_ERROR(std::string("register_admin failed: ") + ex.what());
 		return 1;
 	}
 }

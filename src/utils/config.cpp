@@ -63,6 +63,22 @@ std::string ScalarStringOrDefaultExpanded(const YAML::Node& node,
 	return ExpandEnvVars(node.as<std::string>());
 }
 
+JudgeWorkerConfig ParseJudgeWorker(const YAML::Node& node) {
+	JudgeWorkerConfig worker;
+	if (auto host = node["host"]; host && host.IsScalar()) {
+		worker.host = ScalarStringOrDefaultExpanded(host, worker.host);
+	}
+	worker.port = ScalarOrDefault<int>(node["port"], worker.port);
+	if (auto health_path = node["health_path"]; health_path && health_path.IsScalar()) {
+		worker.health_path = ScalarStringOrDefaultExpanded(health_path, worker.health_path);
+	}
+	if (auto judge_path = node["judge_path"]; judge_path && judge_path.IsScalar()) {
+		worker.judge_path = ScalarStringOrDefaultExpanded(judge_path, worker.judge_path);
+	}
+	worker.timeout_ms = ScalarOrDefault<int>(node["timeout_ms"], worker.timeout_ms);
+	return worker;
+}
+
 }  // namespace
 
 LogLevel ParseLogLevel(const std::string& level) {
@@ -134,6 +150,17 @@ AppConfig Config::LoadFromFile(const std::string& path) {
 				ScalarOrDefault<int>(judge["default_time_limit_ms"], cfg.judge.default_time_limit_ms);
 		cfg.judge.default_memory_limit_kb =
 				ScalarOrDefault<int>(judge["default_memory_limit_kb"], cfg.judge.default_memory_limit_kb);
+		cfg.judge.request_timeout_ms =
+				ScalarOrDefault<int>(judge["request_timeout_ms"], cfg.judge.request_timeout_ms);
+		cfg.judge.retry_count = ScalarOrDefault<int>(judge["retry_count"], cfg.judge.retry_count);
+		cfg.judge.health_check_interval_ms =
+				ScalarOrDefault<int>(judge["health_check_interval_ms"], cfg.judge.health_check_interval_ms);
+
+		if (auto workers = judge["workers"]; workers && workers.IsSequence()) {
+			for (const auto& worker_node : workers) {
+				cfg.judge_workers.push_back(ParseJudgeWorker(worker_node));
+			}
+		}
 	}
 
 	// logging

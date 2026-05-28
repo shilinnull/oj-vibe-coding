@@ -1,184 +1,329 @@
-// judge_manager.cpp
-// 简化的 JudgeManager 实现：维护固定数量的工作线程（max_concurrency），从队列取出任务，调用外部可执行 judger_cli（通过 stdin 传 JSON），并读取其 stdout 结果。
-// 该实现为基础版本，错误处理和日志可按需增强。
+#include "judge/judge_manager.h"
 
-#include "judge_manager.h"
-#include "db/dao/submission_dao.h"
-#include "utils/json_helper.h"
-#include <unistd.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <cstdio>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
 #include <sstream>
-#include <cstring>
-#include <filesystem>
-#include <vector>
+#include <sys/socket.h>
+#include <thread>
+
+#include "db/dao/submission_dao.h"
+#include "judge/judge_executor.h"
 #include "utils/logger.h"
 
-JudgeManager::JudgeManager(oj::MySqlPool& pool, int max_concurrency)
-	: pool_(&pool), max_concurrency_(max_concurrency), running_(true) {
-	for (int i = 0; i < max_concurrency_; ++i) {
-		workers_.emplace_back(&JudgeManager::worker_thread, this);
-	}
+using namespace std::chrono_literals;
+
+namespace {
+
+std::string WorkerTag(const oj::JudgeWorkerConfig& cfg) {
+    return cfg.host + ":" + std::to_string(cfg.port);
+}
+
+}  // namespace
+
+JudgeManager::JudgeManager(oj::MySqlPool& pool,
+                           const oj::JudgeConfig& judge_cfg,
+                           const std::vector<oj::JudgeWorkerConfig>& workers)
+    : pool_(&pool),
+      max_concurrency_(judge_cfg.max_concurrency),
+      retry_count_(judge_cfg.retry_count),
+      request_timeout_ms_(judge_cfg.request_timeout_ms),
+      health_check_interval_ms_(judge_cfg.health_check_interval_ms),
+      last_health_probe_(std::chrono::steady_clock::now()) {
+    for (const auto& w : workers) {
+        bool refreshed = false;
+        worker_balancer_.UpsertWorker(w, &refreshed);
+        OJ_LOG_INFO("JudgeManager: bootstrap worker " + WorkerTag(w) + " loaded=0 online=true");
+    }
+    remote_mode_ = worker_balancer_.Size() > 0;
+    if (remote_mode_) {
+        OJ_LOG_INFO("JudgeManager: remote mode enabled, workers=" + std::to_string(worker_balancer_.Size()) +
+                    ", max_concurrency=" + std::to_string(max_concurrency_));
+    } else {
+        OJ_LOG_WARN("JudgeManager: no remote workers configured, submissions will wait/fail until judge_worker is available");
+    }
+
+    int threads = std::max(1, max_concurrency_);
+    OJ_LOG_INFO("JudgeManager: starting judge threads=" + std::to_string(threads));
+    for (int i = 0; i < threads; ++i) {
+        worker_threads_.emplace_back(&JudgeManager::worker_thread, this);
+    }
 }
 
 JudgeManager::~JudgeManager() {
-	shutdown();
-}
-
-bool JudgeManager::submit(const JudgeJob& job) {
-	if (!running_) return false;
-	{
-		std::lock_guard<std::mutex> lk(mu_);
-		queue_.push(job);
-	}
-	cv_.notify_one();
-	return true;
+    shutdown();
 }
 
 void JudgeManager::shutdown() {
-	bool expected = true;
-	if (!running_.compare_exchange_strong(expected, false)) return;
-	cv_.notify_all();
-	for (auto& t : workers_) {
-		if (t.joinable()) t.join();
-	}
+    if (!running_) return;
+    running_ = false;
+    cv_.notify_all();
+    for (auto& t : worker_threads_) if (t.joinable()) t.join();
 }
 
-// Read up to max_bytes from fd. If content exceeds max_bytes, stop and set truncated=true.
-static std::string read_fd_limited(int fd, size_t max_bytes, bool &truncated) {
-	std::string out;
-	out.reserve(std::min<size_t>(max_bytes, 4096));
-	char buf[4096];
-	ssize_t n;
-	size_t total = 0;
-	truncated = false;
-	while ((n = read(fd, buf, sizeof(buf))) > 0) {
-		if (total + (size_t)n > max_bytes) {
-			size_t can = (total >= max_bytes) ? 0 : (max_bytes - total);
-			if (can > 0) out.append(buf, can);
-			truncated = true;
-			break;
-		}
-		out.append(buf, n);
-		total += (size_t)n;
-	}
-	return out;
+bool JudgeManager::submit(const JudgeJob& job) {
+    if (!running_) return false;
+    std::size_t queued = 0;
+    {
+        std::lock_guard<std::mutex> lk(mu_);
+        queue_.push(job);
+        queued = queue_.size();
+    }
+    OJ_LOG_INFO("JudgeManager: queued submission=" + std::to_string(job.submission_id) +
+                ", queue_size=" + std::to_string(queued));
+    cv_.notify_one();
+    return true;
 }
 
-static std::string resolve_judger_cli_path() {
-	for (const char* candidate : {
-				"./run/judger_cli",
-				"../run/judger_cli",
-				"../../run/judger_cli",
-				"run/judger_cli",
-		}) {
-		std::error_code ec;
-		if (std::filesystem::exists(candidate, ec)) {
-			return std::filesystem::path(candidate).lexically_normal().string();
-		}
-	}
-	return "./run/judger_cli";
+void JudgeManager::RegisterWorker(const oj::JudgeWorkerConfig& worker_cfg) {
+    bool refreshed = false;
+    worker_balancer_.UpsertWorker(worker_cfg, &refreshed);
+    remote_mode_ = true;
+    OJ_LOG_INFO(std::string("JudgeManager: worker ") + (refreshed ? "refreshed " : "registered ") + WorkerTag(worker_cfg) +
+                ", total_workers=" + std::to_string(worker_balancer_.Size()));
 }
 
 void JudgeManager::worker_thread() {
-	while (true) {
-		JudgeJob job;
-		{
-			std::unique_lock<std::mutex> lk(mu_);
-			cv_.wait(lk, [this]{ return !queue_.empty() || !running_; });
-			if (!running_ && queue_.empty()) return;
-			job = queue_.front();
-			queue_.pop();
-		}
+    while (running_) {
+        JudgeJob job;
+        {
+            std::unique_lock<std::mutex> lk(mu_);
+            cv_.wait(lk, [this]{ return !queue_.empty() || !running_; });
+            if (!running_ && queue_.empty()) return;
+            job = queue_.front(); queue_.pop();
+            OJ_LOG_INFO("JudgeManager: dequeued submission=" + std::to_string(job.submission_id) +
+                        ", remaining_queue=" + std::to_string(queue_.size()));
+        }
+        std::string out;
+        bool ok = ExecuteJob(job, &out);
+        if (!ok) {
+            OJ_LOG_ERROR("JudgeManager: ExecuteJob failed for " + std::to_string(job.submission_id));
+            {
+                std::lock_guard<std::mutex> lk(mu_);
+                queue_.push(job);
+            }
+            OJ_LOG_WARN("JudgeManager: requeued submission=" + std::to_string(job.submission_id) +
+                        " waiting for judge_worker");
+            std::this_thread::sleep_for(200ms);
+            continue;
+        }
 
-		// 为每个任务 fork 出进程，执行 judger_cli，可通过 PATH 或可执行相对路径找到
-		int inpipe[2];
-		int outpipe[2];
-		if (pipe(inpipe) != 0 || pipe(outpipe) != 0) {
-			OJ_LOG_ERROR("JudgeManager: 创建管道失败");
-			continue;
-		}
+        std::string status = "system_error";
+        int time_ms = 0;
+        int memory_kb = 0;
+        try {
+            auto parsed = nlohmann::json::parse(out);
+            status = parsed.value("status", "system_error");
+            if (parsed.contains("summary") && parsed["summary"].is_object()) {
+                time_ms = parsed["summary"].value("total_time_ms", 0);
+                memory_kb = parsed["summary"].value("peak_memory_kb", 0);
+            }
+        } catch (const std::exception& e) {
+            OJ_LOG_ERROR(std::string("JudgeManager: invalid judge result for ") + std::to_string(job.submission_id) + ": " + e.what());
+        }
 
-		pid_t pid = fork();
-		if (pid < 0) {
-			OJ_LOG_ERROR("JudgeManager: fork 失败");
-			close(inpipe[0]); close(inpipe[1]); close(outpipe[0]); close(outpipe[1]);
-			continue;
-		}
-
-		if (pid == 0) {
-			// 子进程：把 stdin/stdout 重定向到管道，然后 exec judger_cli
-			dup2(inpipe[0], STDIN_FILENO);
-			dup2(outpipe[1], STDOUT_FILENO);
-			// 关闭无用 fd
-			close(inpipe[0]); close(inpipe[1]); close(outpipe[0]); close(outpipe[1]);
-
-			// exec
-			const std::string exe = resolve_judger_cli_path();
-			execlp(exe.c_str(), exe.c_str(), (char*)NULL);
-			// 若 exec 失败，退出
-			dprintf(STDERR_FILENO, "JudgeManager: exec judger_cli 失败: %s\n", strerror(errno));
-			_exit(127);
-		}
-
-		// 父进程：关闭不需要的端，写入 JSON 到子进程 stdin，读取 stdout
-		close(inpipe[0]); close(outpipe[1]);
-
-		// 将 job.payload 序列化并写入子进程 stdin
-		std::string req = job.payload.dump();
-		ssize_t written = 0;
-		while (written < static_cast<ssize_t>(req.size())) {
-			ssize_t n = write(inpipe[1], req.data() + written, static_cast<size_t>(req.size() - written));
-			if (n <= 0) break;
-			written += n;
-		}
-		close(inpipe[1]);
-
-		// 等待子进程结束，再读取其 stdout（顺序调整可避免读取到不完整的输出导致 JSON 解析失败）
-		int status = 0;
-		waitpid(pid, &status, 0);
-
-		// 读取子进程输出（限制最大读取量以防止过大输出耗尽内存或日志）
-		const size_t MAX_READ_BYTES = 128 * 1024; // 128 KB
-		bool truncated = false;
-		std::string out = read_fd_limited(outpipe[0], MAX_READ_BYTES, truncated);
-		if (truncated) {
-			out += "\n... (truncated)";
-		}
-		close(outpipe[0]);
-
-		std::string final_status = "system_error";
-		std::string stored_result;
-		int time_ms = 0;
-		int memory_kb = 0;
-		if (auto parsed = oj::TryParseJson(out, nullptr); parsed.has_value()) {
-			stored_result = out;
-			const auto& result = *parsed;
-			if (result.contains("status") && result["status"].is_string()) {
-				final_status = result["status"].get<std::string>();
-			}
-			if (result.contains("summary") && result["summary"].is_object()) {
-				time_ms = result["summary"].value("total_time_ms", 0);
-				memory_kb = result["summary"].value("peak_memory_kb", 0);
-			}
-		} else if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-			final_status = "system_error";
-			stored_result = json{{"status", "SYSTEM_ERROR"}, {"error", out.empty() ? "judge failed" : out}}.dump();
-		} else {
-			stored_result = json{{"status", "SYSTEM_ERROR"}, {"error", out.empty() ? "empty judge output" : out}}.dump();
-		}
-		try {
-			oj::SubmissionDao dao(*pool_);
-			dao.UpdateResult(job.submission_id, final_status, stored_result, time_ms, memory_kb);
-		} catch (const std::exception& e) {
-			OJ_LOG_ERROR("JudgeManager: 回写 submission_id=" + std::to_string(job.submission_id) + " 失败: " + e.what());
-		}
-
-		// Print concise log only (avoid dumping full judge output which may be huge).
-		size_t preview_len = 2048;
-		std::string preview = out.size() > preview_len ? out.substr(0, preview_len) + "\n... (preview truncated)" : out;
-		OJ_LOG_INFO("JudgeManager: submission_id=" + std::to_string(job.submission_id) + " finished, status=" + final_status + ", time_ms=" + std::to_string(time_ms) + ", memory_kb=" + std::to_string(memory_kb) + ", output_preview_len=" + std::to_string(preview.size()));
-	}
+        try {
+            if (pool_) {
+                oj::SubmissionDao(*pool_).UpdateResult(job.submission_id, status, out, time_ms, memory_kb);
+            }
+        } catch (const std::exception& e) {
+            OJ_LOG_ERROR(std::string("JudgeManager: failed to persist result for ") + std::to_string(job.submission_id) + ": " + e.what());
+        }
+    }
 }
 
+void JudgeManager::ProbeWorkersIfNeeded() {
+    std::vector<std::pair<int, oj::JudgeWorkerConfig>> to_probe;
+    auto now = std::chrono::steady_clock::now();
+    {
+        if (health_check_interval_ms_ <= 0) {
+            return;
+        }
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_health_probe_).count();
+        if (elapsed < health_check_interval_ms_) {
+            return;
+        }
+        last_health_probe_ = now;
+        const auto snapshot = worker_balancer_.Snapshot();
+        for (std::size_t i = 0; i < snapshot.size(); ++i) {
+            to_probe.emplace_back(static_cast<int>(i), snapshot[i].cfg);
+        }
+    }
+
+    for (const auto& item : to_probe) {
+        int id = item.first;
+        const auto& cfg = item.second;
+        bool healthy = HealthCheck(cfg);
+        {
+            auto snapshot = worker_balancer_.Snapshot();
+            if (id < 0 || static_cast<std::size_t>(id) >= snapshot.size()) {
+                continue;
+            }
+            if (healthy) {
+                oj::JudgeWorkerBalancer::WorkerNode node;
+                worker_balancer_.GetWorker(id, &node);
+                if (!node.online) {
+                    worker_balancer_.MarkOnline(id);
+                    OJ_LOG_INFO("JudgeManager: worker back online " + WorkerTag(cfg));
+                }
+            } else {
+                oj::JudgeWorkerBalancer::WorkerNode node;
+                worker_balancer_.GetWorker(id, &node);
+                if (node.online) {
+                    worker_balancer_.MarkOffline(id);
+                    OJ_LOG_WARN("JudgeManager: worker health check failed, marked offline " + WorkerTag(cfg));
+                }
+            }
+        }
+    }
+}
+
+bool JudgeManager::ExecuteJob(const JudgeJob& job, std::string* result_json) {
+    if (!remote_mode_) {
+        OJ_LOG_WARN("JudgeManager: no remote judge_worker available for submission=" + std::to_string(job.submission_id));
+        return false;
+    }
+
+    for (int attempt = 0; attempt < retry_count_; ++attempt) {
+        if (ExecuteRemotely(job, result_json)) return true;
+        OJ_LOG_WARN("JudgeManager: remote execute failed for submission=" + std::to_string(job.submission_id) +
+                    ", attempt=" + std::to_string(attempt + 1) +
+                    ", retries=" + std::to_string(retry_count_));
+        std::this_thread::sleep_for(100ms);
+    }
+    OJ_LOG_ERROR("JudgeManager: all remote judge attempts failed for submission=" + std::to_string(job.submission_id));
+    return false;
+}
+
+bool JudgeManager::SelectWorker(int* id, oj::JudgeWorkerConfig* worker_cfg) {
+    ProbeWorkersIfNeeded();
+    std::uint64_t load_before = 0;
+    if (!worker_balancer_.SelectWorker(id, worker_cfg, &load_before)) {
+        OJ_LOG_WARN("JudgeManager: no online worker available, workers=" + std::to_string(worker_balancer_.Size()));
+        return false;
+    }
+    OJ_LOG_INFO("JudgeManager: selected worker " + WorkerTag(*worker_cfg) +
+                ", load_before=" + std::to_string(load_before) +
+                ", load_after=" + std::to_string(load_before + 1));
+    return true;
+}
+
+void JudgeManager::ReleaseWorkerLoad(int id) {
+    oj::JudgeWorkerBalancer::WorkerNode node;
+    if (!worker_balancer_.GetWorker(id, &node)) return;
+    worker_balancer_.ReleaseWorkerLoad(id);
+    if (worker_balancer_.GetWorker(id, &node)) {
+        OJ_LOG_INFO("JudgeManager: release worker load " + WorkerTag(node.cfg) +
+                    ", load_now=" + std::to_string(node.load));
+    }
+}
+
+void JudgeManager::MarkOffline(int id) {
+    oj::JudgeWorkerBalancer::WorkerNode node;
+    if (!worker_balancer_.GetWorker(id, &node)) return;
+    worker_balancer_.MarkOffline(id);
+    OJ_LOG_WARN("JudgeManager: mark worker offline " + WorkerTag(node.cfg));
+}
+
+void JudgeManager::MarkOnline(int id) {
+    oj::JudgeWorkerBalancer::WorkerNode node;
+    if (!worker_balancer_.GetWorker(id, &node)) return;
+    worker_balancer_.MarkOnline(id);
+    OJ_LOG_INFO("JudgeManager: mark worker online " + WorkerTag(node.cfg));
+}
+
+bool JudgeManager::HealthCheck(const oj::JudgeWorkerConfig& worker_cfg) {
+    int status = 0; std::string body;
+    bool ok = SendHttpJson(worker_cfg, "GET", worker_cfg.health_path, std::string(), &body, &status);
+    OJ_LOG_INFO("JudgeManager: health check " + WorkerTag(worker_cfg) +
+                ", ok=" + std::string(ok ? "true" : "false") +
+                ", status=" + std::to_string(status));
+    return ok && status == 200 && body.find("ok") != std::string::npos;
+}
+
+static bool write_all_fd(int fd, const std::string& data) {
+    size_t sent = 0; while (sent < data.size()) {
+        ssize_t n = ::send(fd, data.data() + sent, data.size() - sent, 0);
+        if (n <= 0) { if (errno == EINTR) continue; return false; }
+        sent += static_cast<size_t>(n);
+    }
+    return true;
+}
+
+bool JudgeManager::SendHttpJson(const oj::JudgeWorkerConfig& worker_cfg,
+                                const std::string& method,
+                                const std::string& path,
+                                const std::string& body,
+                                std::string* response_body,
+                                int* response_status) {
+    struct addrinfo hints{}; hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_STREAM;
+    struct addrinfo* res = nullptr;
+    std::string port = std::to_string(worker_cfg.port);
+    if (getaddrinfo(worker_cfg.host.c_str(), port.c_str(), &hints, &res) != 0) return false;
+    int fd = -1;
+    for (auto* rp = res; rp != nullptr; rp = rp->ai_next) {
+        fd = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+        if (fd < 0) continue;
+        struct timeval tv; tv.tv_sec = worker_cfg.timeout_ms / 1000; tv.tv_usec = (worker_cfg.timeout_ms % 1000) * 1000;
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+        if (connect(fd, rp->ai_addr, rp->ai_addrlen) == 0) break;
+        close(fd); fd = -1;
+    }
+    freeaddrinfo(res);
+    if (fd < 0) return false;
+
+    std::ostringstream req;
+    req << method << " " << path << " HTTP/1.1\r\n";
+    req << "Host: " << worker_cfg.host << ":" << worker_cfg.port << "\r\n";
+    req << "Connection: close\r\n";
+    if (!body.empty()) {
+        req << "Content-Type: application/json;charset=utf-8\r\n";
+        req << "Content-Length: " << body.size() << "\r\n";
+    }
+    req << "\r\n";
+    req << body;
+    std::string request = req.str();
+    if (!write_all_fd(fd, request)) { close(fd); return false; }
+
+    std::string raw; char buf[4096];
+    while (true) {
+        ssize_t n = recv(fd, buf, sizeof(buf), 0);
+        if (n > 0) raw.append(buf, buf + n);
+        else if (n == 0) break;
+        else { if (errno == EINTR) continue; close(fd); return false; }
+    }
+    close(fd);
+
+    const std::string sep = "\r\n\r\n";
+    auto p = raw.find(sep);
+    if (p == std::string::npos) return false;
+    std::istringstream hs(raw.substr(0, p));
+    std::string ver; int status = 0; if (!(hs >> ver >> status)) return false;
+    if (response_status) *response_status = status;
+    if (response_body) *response_body = raw.substr(p + sep.size());
+    return true;
+}
+
+bool JudgeManager::ExecuteRemotely(const JudgeJob& job, std::string* result_json) {
+    int id = -1; oj::JudgeWorkerConfig cfg;
+    if (!SelectWorker(&id, &cfg)) return false;
+    OJ_LOG_INFO("JudgeManager: dispatch submission=" + std::to_string(job.submission_id) +
+                " to worker " + WorkerTag(cfg));
+    int status = 0; std::string resp;
+    bool ok = SendHttpJson(cfg, "POST", cfg.judge_path, job.payload.dump(), &resp, &status);
+    ReleaseWorkerLoad(id);
+    if (!ok || status != 200) {
+        OJ_LOG_WARN("JudgeManager: worker request failed " + WorkerTag(cfg) +
+                    ", ok=" + std::string(ok ? "true" : "false") +
+                    ", status=" + std::to_string(status) +
+                    ", submission=" + std::to_string(job.submission_id));
+        MarkOffline(id);
+        return false;
+    }
+    if (result_json) *result_json = resp;
+    OJ_LOG_INFO("JudgeManager: remote judge finished submission=" + std::to_string(job.submission_id) +
+                ", worker=" + WorkerTag(cfg) +
+                ", response_bytes=" + std::to_string(resp.size()));
+    return true;
+}

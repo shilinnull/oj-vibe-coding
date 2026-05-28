@@ -225,7 +225,7 @@ class Socket {
             ssize_t ret = recv(_sockfd, buf, len, flag);
             
             if (ret > 0) {
-                OJ_LOG_INFO(std::string("进入Recv, 读到") + std::to_string(ret) + "字节");
+                OJ_LOG_DEBUG(std::string("进入Recv, 读到") + std::to_string(ret) + "字节");
             }
             if (ret < 0) {
                 if (errno == EAGAIN || errno == EINTR) {

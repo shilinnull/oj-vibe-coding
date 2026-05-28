@@ -75,6 +75,7 @@ export function initSubmissionResultPage(ctx) {
 	// 客户端最长等待时长（毫秒），超过后若仍未完成则提示超时（客户端级别）
 	const CLIENT_MAX_POLL_MS = 30 * 1000; // 30s
 	let pollStart = 0;
+	let timeoutWarned = false;
 
 	async function refreshResult() {
 		try {
@@ -115,34 +116,9 @@ export function initSubmissionResultPage(ctx) {
 					pollTimer = window.setInterval(refreshResult, 1800);
 				}
 				const elapsed = Date.now() - pollStart;
-				if (elapsed >= CLIENT_MAX_POLL_MS) {
-					// stop polling and show timeout to user
-					if (pollTimer) {
-						window.clearInterval(pollTimer);
-						pollTimer = 0;
-					}
-					const nsTLE = normalizeStatus("time_limit_exceeded");
-					statusEl.innerHTML = `<span class="status-badge ${nsTLE.className}">${escapeHtml(nsTLE.text)}</span>`;
-					  // 仅显示 TIME_LIMIT_EXCEEDED：设置状态并把每个用例标为 TLE
-					  try {
-						  const caseCount = submission.result?.sample_case_count || summary.total || 1;
-						  const fakeResults = [];
-						  for (let i = 1; i <= caseCount; ++i) {
-							  fakeResults.push({
-								  test_case_id: i,
-								  status: "time_limit_exceeded",
-								  time_ms: null,
-								  memory_kb: null,
-								  expected_output: "",
-								  actual_output: "",
-							  });
-						  }
-						  caseBody.innerHTML = renderCaseRows(fakeResults);
-					  } catch (e) {
-						  // ignore
-					  }
-					  loadingEl.style.display = "none";
-					  return;
+				if (elapsed >= CLIENT_MAX_POLL_MS && !timeoutWarned) {
+					timeoutWarned = true;
+					showToast("判题仍在进行，已等待较久，请稍后刷新查看结果", "warning");
 				}
 			} else {
 				// finished

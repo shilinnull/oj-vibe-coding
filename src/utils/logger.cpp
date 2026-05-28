@@ -116,9 +116,6 @@ void Logger::GetTimestampParts(std::string& date_str, std::string& full_ts_str) 
 	int y = tm.tm_year + 1900;
 	int m = tm.tm_mon + 1;
 	int d = tm.tm_mday;
-	int h = tm.tm_hour;
-	int min = tm.tm_min;
-	int s = tm.tm_sec;
 
 	std::ostringstream date_oss;
 	date_oss << y << '_' << m << '_' << d;

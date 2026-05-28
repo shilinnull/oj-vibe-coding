@@ -5,6 +5,7 @@ project(oj_vibe_coding LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(BUILD_ROOT ${CMAKE_BINARY_DIR})
 
 option(OJ_BUILD_TESTS "Build unit tests" ON)
 
@@ -61,42 +62,50 @@ target_link_libraries(oj_core
 
 target_compile_options(oj_core PRIVATE -Wall -Wextra -Wpedantic)
 
+# Server binary in build/
 add_executable(oj_server src/main.cpp)
 target_link_libraries(oj_server PRIVATE oj_core)
+set_target_properties(oj_server PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${BUILD_ROOT})
 
-# 单独编译 judger_cli 可执行，用于判题子进程
+# judger_cli placed in source run/ so tests and scripts find it at ./run/judger_cli
 add_executable(judger_cli src/judge/judger_cli.cpp)
 target_link_libraries(judger_cli PRIVATE oj_core nlohmann_json::nlohmann_json)
-# 将可执行放到 run/ 目录，便于 JudgeManager 使用相对路径 ./run/judger_cli
-set_target_properties(judger_cli PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/run)
+set_target_properties(judger_cli PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/run)
 
+# judge worker binary in build/
+add_executable(judge_worker src/judge/judge_worker_server.cpp)
+target_link_libraries(judge_worker PRIVATE oj_core nlohmann_json::nlohmann_json)
+set_target_properties(judge_worker PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${BUILD_ROOT})
+
+# sandbox preload library in build/
 add_library(judge_sandbox_preload SHARED src/judge/sandbox_preload.cpp)
 target_link_libraries(judge_sandbox_preload PRIVATE dl)
-set_target_properties(judge_sandbox_preload PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/run)
+set_target_properties(judge_sandbox_preload PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/run)
 
+# tools -> build/ (no source tree copies)
 add_executable(register_admin tools/register_admin.cpp)
 target_link_libraries(register_admin PRIVATE oj_core)
-set_target_properties(register_admin PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+set_target_properties(register_admin PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${BUILD_ROOT})
 
 add_executable(reset_web_data tools/reset_web_data.cpp)
 target_link_libraries(reset_web_data PRIVATE oj_core)
-set_target_properties(reset_web_data PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+set_target_properties(reset_web_data PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${BUILD_ROOT})
 
 if(OJ_BUILD_TESTS)
-	enable_testing()
-	find_package(GTest REQUIRED)
+    enable_testing()
+    find_package(GTest REQUIRED)
 
-	# Keep unit tests under tests/ and auto-pick *_test.cpp recursively.
-	file(GLOB_RECURSE OJ_TEST_SOURCES CONFIGURE_DEPENDS
-		tests/*_test.cpp
-	)
+    # Keep unit tests under tests/ and auto-pick *_test.cpp recursively.
+    file(GLOB_RECURSE OJ_TEST_SOURCES CONFIGURE_DEPENDS
+        tests/*_test.cpp
+    )
 
-	add_executable(oj_tests
-		tests/main.cpp
-		${OJ_TEST_SOURCES}
-	)
+    add_executable(oj_tests
+        tests/main.cpp
+        ${OJ_TEST_SOURCES}
+    )
 
-	target_link_libraries(oj_tests PRIVATE oj_core GTest::gtest GTest::gtest_main)
+    target_link_libraries(oj_tests PRIVATE oj_core GTest::gtest GTest::gtest_main)
 
-	add_test(NAME oj_tests COMMAND oj_tests)
+    add_test(NAME oj_tests COMMAND oj_tests)
 endif()

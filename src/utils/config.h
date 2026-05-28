@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace oj {
 
@@ -46,6 +47,17 @@ struct JudgeConfig {
 	std::string work_dir{"./run/judge"};
 	int default_time_limit_ms{1000};
 	int default_memory_limit_kb{262144};
+	int request_timeout_ms{3000};
+	int retry_count{3};
+	int health_check_interval_ms{5000};
+};
+
+struct JudgeWorkerConfig {
+	std::string host{"127.0.0.1"};
+	int port{9001};
+	std::string health_path{"/healthz"};
+	std::string judge_path{"/judge"};
+	int timeout_ms{3000};
 };
 
 struct LoggingConfig {
@@ -61,6 +73,7 @@ struct AppConfig {
 	AuthConfig auth{};
 	JudgeConfig judge{};
 	LoggingConfig logging{};
+	std::vector<JudgeWorkerConfig> judge_workers{};
 };
 
 class Config {

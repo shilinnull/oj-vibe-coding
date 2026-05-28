@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "net/http.hpp"
+#include "handler/handler_base.h"
 #include "utils/logger.h"
 #include "handler/auth_handler.h"
 #include "handler/admin_handler.h"
@@ -94,10 +95,39 @@ HttpServer::HttpServer(const oj::AppConfig& cfg) {
 	// 服务启动时先初始化数据库连接池，再把认证相关路由挂进去。
 	try {
 		pool_ = std::make_unique<MySqlPool>(cfg.mysql);
-		judge_manager_ = std::make_unique<JudgeManager>(*pool_, cfg.judge.max_concurrency);
+		judge_manager_ = std::make_unique<JudgeManager>(*pool_, cfg.judge, cfg.judge_workers);
 		handler::RegisterAuthRoutes(router_, cfg.auth.jwt.secret, *pool_);
 		handler::RegisterProblemRoutes(router_, *pool_);
 		handler::RegisterSubmissionRoutes(router_, *pool_, *judge_manager_);
+
+		router_.Post(R"(/api/judge/workers/register)", [this](const http::Request& req, http::Response& res) {
+			handler::GuardJsonHandler(res, [&]() {
+				auto body_json = handler::ParseJsonBody(req, res);
+				if (!body_json.has_value()) {
+					return;
+				}
+
+				const auto& body = *body_json;
+				if (!body.contains("port") || !body["port"].is_number_integer()) {
+					handler::SendJsonError(res, 400, "port is required");
+					return;
+				}
+
+				oj::JudgeWorkerConfig worker_cfg;
+				worker_cfg.host = body.value("host", std::string("127.0.0.1"));
+				worker_cfg.port = body["port"].get<int>();
+				worker_cfg.health_path = body.value("health_path", std::string("/healthz"));
+				worker_cfg.judge_path = body.value("judge_path", std::string("/judge"));
+				worker_cfg.timeout_ms = body.value("timeout_ms", 3000);
+				if (worker_cfg.port <= 0 || worker_cfg.port > 65535) {
+					handler::SendJsonError(res, 400, "invalid worker port");
+					return;
+				}
+
+				judge_manager_->RegisterWorker(worker_cfg);
+				handler::SendJson(res, 200, nlohmann::json{{"status", "ok"}, {"host", worker_cfg.host}, {"port", worker_cfg.port}});
+			});
+		});
 		handler::RegisterAdminRoutes(router_, cfg.auth.jwt.secret, *pool_);
 	} catch (const std::exception& e) {
 		OJ_LOG_ERROR(std::string("failed init db or auth routes: ") + e.what());

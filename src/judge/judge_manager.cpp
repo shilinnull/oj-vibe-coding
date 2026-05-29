@@ -98,13 +98,19 @@ void JudgeManager::worker_thread() {
         bool ok = ExecuteJob(job, &out);
         if (!ok) {
             OJ_LOG_ERROR("JudgeManager: ExecuteJob failed for " + std::to_string(job.submission_id));
-            {
-                std::lock_guard<std::mutex> lk(mu_);
-                queue_.push(job);
+            out = nlohmann::json{{"status", "SYSTEM_ERROR"},
+                                 {"error", "no available judge_worker"},
+                                 {"summary", {{"total", 0}, {"passed", 0}, {"total_time_ms", 0}, {"peak_memory_kb", 0}}},
+                                 {"results", nlohmann::json::array()}}
+                          .dump();
+            try {
+                if (pool_) {
+                    oj::SubmissionDao(*pool_).UpdateResult(job.submission_id, "system_error", out, 0, 0);
+                }
+            } catch (const std::exception& e) {
+                OJ_LOG_ERROR(std::string("JudgeManager: failed to persist system_error for ") +
+                             std::to_string(job.submission_id) + ": " + e.what());
             }
-            OJ_LOG_WARN("JudgeManager: requeued submission=" + std::to_string(job.submission_id) +
-                        " waiting for judge_worker");
-            std::this_thread::sleep_for(200ms);
             continue;
         }
 

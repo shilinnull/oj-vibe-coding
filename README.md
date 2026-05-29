@@ -137,19 +137,25 @@ auth:
 Worker 以独立进程运行，启动后自动向 OJ Server 注册：
 
 ```bash
-# 启动 3 个 Worker，分别监听 9001、9002、9003
-./build/judge_worker 9001 &
-./build/judge_worker 9002 &
-./build/judge_worker 9003 &
+# 启动 3 个 Worker，分别监听 9001、9002、9003，并注册到 10.0.0.1:8080
+./build/judge_worker 9001 10.0.0.1 8080 &
+./build/judge_worker 9002 10.0.0.1 8080 &
+./build/judge_worker 9003 10.0.0.1 8080 &
+```
+
+启动参数格式（必填）：
+
+```bash
+./build/judge_worker <worker_port> <oj_server_host> <oj_server_port>
 ```
 
 环境变量配置 Worker 注册信息：
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `JUDGE_SERVER_HOST` | `127.0.0.1` | OJ Server 地址 |
-| `JUDGE_SERVER_PORT` | `8080` | OJ Server 端口 |
 | `JUDGE_WORKER_HOST` | `127.0.0.1` | Worker 自身地址 |
+
+说明：`worker_port`、`oj_server_host`、`oj_server_port` 都必须显式传入，`judge_worker` 不再为它们提供默认值。
 
 ### 创建管理员
 

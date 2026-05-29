@@ -162,19 +162,25 @@ Worker 是独立于 OJ Server 的进程，启动后自动向 Server 注册。支
 ### 启动 Worker
 
 ```bash
-# 单机启动 3 个 Worker（分别监听不同端口）
-./build/judge_worker 9001 &
-./build/judge_worker 9002 &
-./build/judge_worker 9003 &
+# 单机启动 3 个 Worker（分别监听不同端口），并注册到本机 OJ Server
+./build/judge_worker 9001 127.0.0.1 8080 &
+./build/judge_worker 9002 127.0.0.1 8080 &
+./build/judge_worker 9003 127.0.0.1 8080 &
+```
+
+启动参数格式（必填）：
+
+```bash
+./build/judge_worker <worker_port> <oj_server_host> <oj_server_port>
 ```
 
 ### 环境变量
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `JUDGE_SERVER_HOST` | `127.0.0.1` | OJ Server 地址 |
-| `JUDGE_SERVER_PORT` | `8080` | OJ Server 端口 |
 | `JUDGE_WORKER_HOST` | `127.0.0.1` | Worker 自身地址（多机部署需修改） |
+
+说明：`worker_port`、`oj_server_host`、`oj_server_port` 都必须显式传入，`judge_worker` 不再为它们提供默认值。
 
 ### 多机部署
 
@@ -182,7 +188,7 @@ Worker 是独立于 OJ Server 的进程，启动后自动向 Server 注册。支
 
 ```bash
 # 在 Worker 机器上启动
-JUDGE_SERVER_HOST=10.0.0.1 JUDGE_WORKER_HOST=10.0.0.2 ./build/judge_worker 9001
+JUDGE_WORKER_HOST=10.0.0.2 ./build/judge_worker 9001 10.0.0.1 8080
 ```
 
 ### Worker systemd 服务
@@ -199,7 +205,9 @@ Type=simple
 User=oj
 Group=oj
 WorkingDirectory=/opt/oj-vibe-coding
-ExecStart=/opt/oj-vibe-coding/build/judge_worker %i
+Environment=OJ_SERVER_HOST=127.0.0.1
+Environment=OJ_SERVER_PORT=8080
+ExecStart=/opt/oj-vibe-coding/build/judge_worker %i ${OJ_SERVER_HOST} ${OJ_SERVER_PORT}
 Restart=on-failure
 RestartSec=3
 

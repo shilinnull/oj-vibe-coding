@@ -26,16 +26,41 @@ std::string EnvOrDefault(const char* name, const std::string& fallback) {
 }
 
 int ResolvePort(int argc, char* argv[]) {
-	if (argc >= 2) {
-		try {
-			int port = std::stoi(argv[1]);
-			if (port > 0 && port <= 65535) {
-				return port;
-			}
-		} catch (...) {
-		}
+	if (argc < 2) {
+		return -1;
 	}
-	return 9001;
+	try {
+		int port = std::stoi(argv[1]);
+		if (port > 0 && port <= 65535) {
+			return port;
+		}
+	} catch (...) {
+	}
+	return -1;
+}
+
+int ResolveServerPort(int argc, char* argv[]) {
+	if (argc < 4) {
+		return -1;
+	}
+	try {
+		int port = std::stoi(argv[3]);
+		if (port > 0 && port <= 65535) {
+			return port;
+		}
+	} catch (...) {
+	}
+	return -1;
+}
+
+std::string ResolveServerHost(int argc, char* argv[]) {
+	if (argc < 3) {
+		return std::string();
+	}
+	if (argv[2] == nullptr || argv[2][0] == '\0') {
+		return std::string();
+	}
+	return argv[2];
 }
 
 bool WriteAll(int fd, const std::string& data) {
@@ -135,17 +160,9 @@ bool SendHttpJson(const std::string& host,
 	return ParseHttpResponse(raw_response, response_status, response_body);
 }
 
-bool RegisterWorkerToServer(int worker_port) {
-	const std::string server_host = EnvOrDefault("JUDGE_SERVER_HOST", "127.0.0.1");
-	const int server_port = [&]() {
-		if (const char* value = std::getenv("JUDGE_SERVER_PORT")) {
-			try {
-				return std::stoi(value);
-			} catch (...) {
-			}
-		}
-		return 8080;
-	}();
+bool RegisterWorkerToServer(int worker_port,
+						const std::string& server_host,
+						int server_port) {
 	const std::string worker_host = EnvOrDefault("JUDGE_WORKER_HOST", "127.0.0.1");
 	const std::string body = std::string("{") +
 		"\"host\":\"" + worker_host + "\"," +
@@ -164,14 +181,14 @@ std::string ReadBody(const HttpRequest& req) {
 }
 
 void Usage(const std::string& proc) {
-	std::cerr << "Usage: \n\t" << proc << " [port]" << std::endl;
-	std::cerr << "If port is omitted, the worker listens on 9001." << std::endl;
+	std::cerr << "Usage: \n\t" << proc << " <port> <oj_server_host> <oj_server_port>" << std::endl;
+	std::cerr << "All startup parameters are required and no default values are used." << std::endl;
 }
 
 }  // namespace
 
 int main(int argc, char* argv[]) {
-	if (argc > 2) {
+	if (argc != 4) {
 		Usage(argv[0]);
 		return 1;
 	}
@@ -181,12 +198,19 @@ int main(int argc, char* argv[]) {
 	oj::Logger::Instance().Init(log_cfg);
 
 	const int port = ResolvePort(argc, argv);
+	const std::string server_host = ResolveServerHost(argc, argv);
+	const int server_port = ResolveServerPort(argc, argv);
+	if (port <= 0 || server_host.empty() || server_port <= 0) {
+		Usage(argv[0]);
+		return 1;
+	}
 	OJ_LOG_INFO("judge_worker: listening on port " + std::to_string(port));
+	OJ_LOG_INFO("judge_worker: register target " + server_host + ":" + std::to_string(server_port));
 	HttpServer svr(port);
 
-	std::thread register_thread([port]() {
+	std::thread register_thread([port, server_host, server_port]() {
 		for (;;) {
-			if (RegisterWorkerToServer(port)) {
+			if (RegisterWorkerToServer(port, server_host, server_port)) {
 				OJ_LOG_INFO("judge_worker: registered to oj_server on port " + std::to_string(port));
 				return;
 			}
